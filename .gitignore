@@ -1,0 +1,20 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local environments
+venv/
+.env
+
+# SQLite Database
+db.sqlite
+
+# Large Binaries
+OllamaSetup.exe
+ffmpeg.exe
+
+# Recorded media clips
+media/
+*.wav
+*.mp3
