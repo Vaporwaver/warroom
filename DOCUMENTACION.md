@@ -24,7 +24,7 @@ graph TD
         SE[scrapers.py: MonitoringEngine]
         ffmpeg[🔊 FFmpeg & yt-dlp]
         Whisper[🎙️ OpenAI Whisper - Local]
-        Ollama[🤖 Ollama / gemma:2b - Local]
+        Ollama[🤖 Ollama / gemma4:e2b - Local]
     end
 
     %% Persistencia
@@ -124,7 +124,7 @@ El sistema opera bajo una política estricta de privacidad. Ningún dato de moni
 1. **OpenAI Whisper (Model: `tiny` / `base`)**:
    - Carga localmente mediante la librería `whisper`.
    - Se encarga de procesar los flujos de voz (Radio, TV y fallbacks de YouTube) y convertirlos a texto plano.
-2. **Ollama (`gemma:2b`)**:
+2. **Ollama (`gemma4:e2b`)**:
    - Ejecuta un servidor local en el puerto `11434`.
    - **Clasificación de Sentimientos**: Identifica si una mención es `🟢 Positivo`, `🔵 Neutral` o `🔴 Negativo`.
    - **Resumen en una línea**: Sintetiza discursos extensos de radio o TV en una sola oración concisa para su visualización rápida en las tarjetas.
@@ -168,7 +168,7 @@ El operador debe ejecutar el archivo `setup.bat` (preferiblemente como Administr
 3. Instala todas las dependencias listadas en `requirements.txt`.
 4. Descarga los navegadores headless requeridos por Playwright.
 5. Ejecuta la instalación silenciosa de Ollama (`OllamaSetup.exe /silent`).
-6. Inicia temporalmente Ollama para descargar localmente el modelo `gemma:2b`.
+6. Inicia temporalmente Ollama para descargar localmente el modelo `gemma4:e2b`.
 
 > [!WARNING]
 > **Permisos de Antivirus**: Algunos antivirus restrictivos en Windows pueden bloquear la ejecución de scripts `.bat` o la descarga de los binarios de Playwright/Ollama. En tal caso, se recomienda añadir una excepción para la carpeta del proyecto.
@@ -189,7 +189,7 @@ Para arrancar el sistema, el operador simplemente debe hacer doble clic en `run.
 
 ### El Diagnóstico de Ollama muestra `❌ N/A` en la barra lateral
 * **Causa**: El servicio local de Ollama no se está ejecutando o no ha terminado de cargar.
-* **Solución**: Abra una terminal en Windows y ejecute `ollama list` para verificar que el servicio responda. Asegúrese de que el modelo esté descargado corriendo `ollama run gemma:2b` en la consola.
+* **Solución**: Abra una terminal en Windows y ejecute `ollama list` para verificar que el servicio responda. Asegúrese de que el modelo esté descargado corriendo `ollama run gemma4:e2b` en la consola.
 
 ### No se capturan alertas reales de Instagram
 * **Causa**: Instagram ha bloqueado temporalmente la dirección IP pública por exceso de consultas.

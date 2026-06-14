@@ -1151,7 +1151,7 @@ class TVScraper:
 
 # --- AI Ollama Analyzer ---
 class OllamaAnalyzer:
-    def __init__(self, model_name="gemma:2b"):
+    def __init__(self, model_name="gemma4:e2b"):
         self.model_name = model_name
 
     def analyze(self, text):
@@ -1276,7 +1276,7 @@ class OllamaAnalyzer:
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma:2b", instagram_sessionid=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation

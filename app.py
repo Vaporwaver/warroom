@@ -465,7 +465,7 @@ if not st.session_state.monitoring_active:
             scan_interval=st.session_state.get("scan_interval_val", 30),
             force_simulation=st.session_state.force_simulation,
             whisper_model=st.session_state.get("whisper_model_val", "tiny"),
-            ollama_model=st.session_state.get("ollama_model_val", "gemma:2b"),
+            ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
             instagram_sessionid=st.session_state.get("instagram_sessionid_val", "")
         )
         st.session_state.engine.start()
@@ -511,7 +511,7 @@ st.sidebar.selectbox(
 )
 
 # Fetch active models for selection if Ollama is running
-ollama_options = ["gemma:2b", "gemma:7b"]
+ollama_options = ["gemma4:e2b", "gemma4:e4b", "gemma:2b", "gemma:7b"]
 if sys_status["ollama_models"]:
     for m in sys_status["ollama_models"]:
         if m not in ollama_options:
@@ -1003,7 +1003,7 @@ with col_left:
                     try:
                         # Call Ollama local
                         import scrapers
-                        analyzer = scrapers.OllamaAnalyzer(st.session_state.get("ollama_model_val", "gemma:2b"))
+                        analyzer = scrapers.OllamaAnalyzer(st.session_state.get("ollama_model_val", "gemma4:e2b"))
                         import ollama
                         client = ollama.Client(host='http://localhost:11434', timeout=30.0)
                         response = client.chat(

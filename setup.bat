@@ -92,11 +92,11 @@ if exist "%LocalAppData%\Programs\Ollama\ollama app.exe" (
 echo Esperando 10 segundos a que el servicio se inicialice...
 timeout /t 10 >nul
 if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
-    "%LocalAppData%\Programs\Ollama\ollama.exe" pull gemma:2b
+    "%LocalAppData%\Programs\Ollama\ollama.exe" pull gemma4:e2b
 ) else (
-    ollama pull gemma:2b
+    ollama pull gemma4:e2b
 )
-echo [OK] Modelo gemma:2b descargado e instalado.
+echo [OK] Modelo gemma4:e2b descargado e instalado.
 
 echo.
 echo =======================================================
