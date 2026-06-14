@@ -8,9 +8,146 @@ import textwrap
 
 # Import scrapers backend
 import scrapers
+import database
 import subprocess
 import tempfile
 import base64
+
+def test_smtp_connection(config):
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    
+    server = config.get("server")
+    port = config.get("port")
+    user = config.get("user")
+    password = config.get("password")
+    security = config.get("security")
+    to_emails = [e.strip() for e in config.get("to", "").split(",") if e.strip()]
+    
+    if not to_emails:
+        return False, "No hay destinatarios especificados."
+        
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = user
+        msg['To'] = ", ".join(to_emails)
+        msg['Subject'] = "War Room - Prueba de Conexión SMTP"
+        
+        body = (
+            "Este es un correo de prueba automático del sistema War Room Monitoreo.\n\n"
+            "Si estás recibiendo esto, significa que la configuración del servidor SMTP es correcta y la conexión es exitosa.\n\n"
+            "Detalles de la conexión:\n"
+            f"- Servidor: {server}:{port}\n"
+            f"- Usuario: {user}\n"
+            f"- Seguridad: {security}\n"
+        )
+        msg.attach(MIMEText(body, 'plain'))
+        
+        if security == "SSL/TLS":
+            smtp_conn = smtplib.SMTP_SSL(server, port, timeout=10.0)
+        else:
+            smtp_conn = smtplib.SMTP(server, port, timeout=10.0)
+            if security == "STARTTLS":
+                smtp_conn.ehlo()
+                smtp_conn.starttls()
+                smtp_conn.ehlo()
+                
+        smtp_conn.login(user, password)
+        smtp_conn.sendmail(user, to_emails, msg.as_string())
+        smtp_conn.quit()
+        return True, None
+    except Exception as e:
+        return False, str(e)
+
+def send_email_report_thread(config, report_md, csv_data, ai_summary):
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.base import MIMEBase
+    from email import encoders
+    
+    server = config.get("server")
+    port = config.get("port")
+    user = config.get("user")
+    password = config.get("password")
+    security = config.get("security")
+    to_emails = [e.strip() for e in config.get("to", "").split(",") if e.strip()]
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = user
+        msg['To'] = ", ".join(to_emails)
+        msg['Subject'] = f"War Room - Reporte Ejecutivo de Monitoreo ({datetime.now().strftime('%Y-%m-%d')})"
+        
+        html_body = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; line-height: 1.6; }}
+                .container {{ padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; }}
+                .header {{ background: linear-gradient(45deg, #1abc9c, #3498db); padding: 15px; color: white; border-radius: 6px 6px 0 0; text-align: center; }}
+                .summary {{ background-color: #f7fafc; padding: 15px; border-left: 4px solid #3498db; border-radius: 4px; margin: 20px 0; }}
+                .footer {{ font-size: 0.85rem; color: #718096; text-align: center; margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2 style="margin:0;">War Room - Monitoreo de Medios</h2>
+                </div>
+                <p>Estimado/a cliente,</p>
+                <p>Adjunto a este correo encontrará el reporte consolidado diario correspondiente al monitoreo de prensa del día de hoy.</p>
+                
+                <div class="summary">
+                    <strong style="color:#2c5282;">Resumen Ejecutivo (IA):</strong>
+                    <p style="margin: 5px 0 0 0;">{ai_summary or "Consulte el archivo Markdown adjunto para ver la síntesis ejecutiva consolidada."}</p>
+                </div>
+                
+                <p>El reporte incluye el desglose detallado de las menciones aprobadas de Radio, TV, YouTube, Instagram y RSS, así como sus estadísticas de cobertura y sentimiento correspondientes.</p>
+                
+                <div class="footer">
+                    Este es un reporte automático del sistema <strong>War Room Monitoreo</strong>.<br/>
+                    © {datetime.now().year} War Room Inc. Todos los derechos reservados.
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        md_part = MIMEBase('application', 'octet-stream')
+        md_part.set_payload(report_md.encode('utf-8'))
+        encoders.encode_base64(md_part)
+        md_part.add_header('Content-Disposition', 'attachment', filename=f"reporte_monitoreo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md")
+        msg.attach(md_part)
+        
+        csv_part = MIMEBase('application', 'octet-stream')
+        csv_part.set_payload(csv_data.encode('utf-8'))
+        encoders.encode_base64(csv_part)
+        csv_part.add_header('Content-Disposition', 'attachment', filename=f"reporte_monitoreo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        msg.attach(csv_part)
+        
+        if security == "SSL/TLS":
+            smtp_conn = smtplib.SMTP_SSL(server, port, timeout=15.0)
+        else:
+            smtp_conn = smtplib.SMTP(server, port, timeout=15.0)
+            if security == "STARTTLS":
+                smtp_conn.ehlo()
+                smtp_conn.starttls()
+                smtp_conn.ehlo()
+                
+        smtp_conn.login(user, password)
+        smtp_conn.sendmail(user, to_emails, msg.as_string())
+        smtp_conn.quit()
+        
+        st.session_state.smtp_status = "success"
+        st.session_state.smtp_result = "Reporte enviado exitosamente."
+    except Exception as e:
+        st.session_state.smtp_status = "error"
+        st.session_state.smtp_result = str(e)
+    finally:
+        st.session_state.smtp_sending = False
 
 def get_lightweight_audio_uri(wav_path):
     if not wav_path or not os.path.exists(wav_path):
@@ -222,15 +359,29 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session State Variables
-if "alerts" not in st.session_state:
-    st.session_state.alerts = []
+# Initialize SQLite database and load persistent alerts on every rerun
+database.initialize_db()
+st.session_state.alerts = database.get_alerts_by_status('pending')
+st.session_state.approved_alerts = database.get_alerts_by_status('approved')
+st.session_state.approved_count = len(st.session_state.approved_alerts)
+
+import json
+# Load SMTP configuration from SQLite database
+smtp_config_str = database.get_state("smtp_config", "{}")
+try:
+    smtp_config = json.loads(smtp_config_str)
+except Exception:
+    smtp_config = {}
+
+if "smtp_sending" not in st.session_state:
+    st.session_state.smtp_sending = False
+if "smtp_status" not in st.session_state:
+    st.session_state.smtp_status = None
+if "smtp_result" not in st.session_state:
+    st.session_state.smtp_result = None
+
 if "system_logs" not in st.session_state:
     st.session_state.system_logs = []
-if "approved_count" not in st.session_state:
-    st.session_state.approved_count = 0
-if "approved_alerts" not in st.session_state:
-    st.session_state.approved_alerts = []
 if "ai_summary_report" not in st.session_state:
     st.session_state.ai_summary_report = None
 if "monitoring_active" not in st.session_state:
@@ -275,6 +426,22 @@ if not st.session_state.monitoring_active:
                 url = line
             radio_list.append({"name": name, "url": url})
             
+        # Parse TV channels
+        tv_lines = st.session_state.get("tv_channels_val", "").split("\n")
+        tv_list = []
+        for line in tv_lines:
+            line = line.strip()
+            if not line:
+                continue
+            if "|" in line:
+                parts = line.split("|", 1)
+                name = parts[0].strip()
+                url = parts[1].strip()
+            else:
+                name = "TV"
+                url = line
+            tv_list.append({"name": name, "url": url})
+            
         # Parse YouTube channels
         yt_lines = st.session_state.get("youtube_channels_val", "").split("\n")
         youtube_list = [line.strip() for line in yt_lines if line.strip()]
@@ -294,6 +461,7 @@ if not st.session_state.monitoring_active:
             youtube_channels=youtube_list,
             instagram_channels=instagram_list,
             rss_feeds=rss_list,
+            tv_channels=tv_list,
             scan_interval=st.session_state.get("scan_interval_val", 30),
             force_simulation=st.session_state.force_simulation,
             whisper_model=st.session_state.get("whisper_model_val", "tiny"),
@@ -383,6 +551,12 @@ if not st.session_state.monitoring_active:
         help="Ingresa Nombre | URL de streaming de audio por línea."
     )
     st.sidebar.text_area(
+        "Canales de TV (Nombre | URL)",
+        value="CDN 37 | https://www.youtube.com/watch?v=h34A93R1g3E\nColor Vision | https://www.youtube.com/watch?v=h34A93R1g3E",
+        key="tv_channels_val",
+        help="Ingresa Nombre | URL de streaming de video por línea."
+    )
+    st.sidebar.text_area(
         "Canales de YouTube (URLs)",
         value="https://www.youtube.com/@nuriapiera/videos",
         key="youtube_channels_val",
@@ -410,6 +584,9 @@ else:
         r_names = [f"📻 {r['name']}" for r in engine.radio_channels]
         st.sidebar.caption(" / ".join(r_names))
         
+        tv_names = [f"📺 {tv['name']}" for tv in getattr(engine, "tv_channels", [])]
+        st.sidebar.caption(" / ".join(tv_names))
+        
         yt_names = [f"🎥 {scrapers.extract_youtube_channel_name(url)}" for url in engine.youtube_channels]
         st.sidebar.caption(" / ".join(yt_names))
         
@@ -420,6 +597,43 @@ else:
         st.sidebar.caption(" / ".join(rss_names))
 
 st.sidebar.markdown("---")
+
+# --- SMTP MAIL CONFIGURATION ---
+with st.sidebar.expander("📧 Configuración SMTP"):
+    smtp_server = st.text_input("Servidor SMTP", value=smtp_config.get("server", ""), key="smtp_server_val")
+    smtp_port = st.number_input("Puerto SMTP", value=int(smtp_config.get("port", 587)), min_value=1, max_value=65535, key="smtp_port_val")
+    smtp_user = st.text_input("Usuario (Email)", value=smtp_config.get("user", ""), key="smtp_user_val")
+    smtp_password = st.text_input("Contraseña", value=smtp_config.get("password", ""), type="password", key="smtp_password_val")
+    smtp_to = st.text_area("Destinatarios (separados por comas)", value=smtp_config.get("to", ""), key="smtp_to_val")
+    security_options = ["STARTTLS (587)", "SSL/TLS (465)", "Ninguna"]
+    saved_security = smtp_config.get("security", "STARTTLS")
+    default_security_idx = 0 if saved_security == "STARTTLS" else (1 if saved_security == "SSL/TLS" else 2)
+    smtp_security = st.selectbox("Seguridad", options=security_options, index=default_security_idx, key="smtp_security_val")
+
+    # If any SMTP config changes, save it to database
+    new_smtp_config = {
+        "server": smtp_server,
+        "port": int(smtp_port),
+        "user": smtp_user,
+        "password": smtp_password,
+        "to": smtp_to,
+        "security": "STARTTLS" if smtp_security.startswith("STARTTLS") else ("SSL/TLS" if smtp_security.startswith("SSL/TLS") else "None")
+    }
+    
+    if new_smtp_config != smtp_config:
+        database.set_state("smtp_config", json.dumps(new_smtp_config))
+        smtp_config = new_smtp_config
+        
+    if st.button("🧪 Probar Conexión", use_container_width=True):
+        if not smtp_server or not smtp_user or not smtp_password or not smtp_to:
+            st.error("Por favor completa todos los campos del servidor.")
+        else:
+            with st.spinner("Probando conexión SMTP..."):
+                test_success, test_err = test_smtp_connection(new_smtp_config)
+                if test_success:
+                    st.success("✅ Conexión SMTP exitosa. Correo de prueba enviado.")
+                else:
+                    st.error(f"❌ Error de conexión: {test_err}")
 
 # --- DIAGNOSTICS DISPLAY ---
 st.sidebar.markdown("### 🔍 Diagnóstico de Dependencias")
@@ -550,11 +764,9 @@ with col_left:
             
             while not engine.alerts_queue.empty():
                 try:
-                    alert = engine.alerts_queue.get_nowait()
-                    # Check for duplicates in local display state
-                    if alert["identifier"] not in [a["identifier"] for a in st.session_state.alerts]:
-                        st.session_state.alerts.insert(0, alert)  # Add at top of the inbox
-                        new_alerts_added = True
+                    # Drain the queue, since they are already saved to database by scrapers.py
+                    _ = engine.alerts_queue.get_nowait()
+                    new_alerts_added = True
                 except queue.Empty:
                     break
                     
@@ -566,17 +778,39 @@ with col_left:
                 except queue.Empty:
                     break
                     
-            if new_alerts_added:
-                # Memory leak protection: Limit live list size
-                if len(st.session_state.alerts) > 100:
-                    st.session_state.alerts = st.session_state.alerts[:100]
-                    
             if len(st.session_state.system_logs) > 300:
                 st.session_state.system_logs = st.session_state.system_logs[:300]
                 
             if new_alerts_added or new_logs_added:
                 st.rerun()
     
+        # Render filters
+        if st.session_state.alerts:
+            st.markdown("##### 🔍 Filtrar y Buscar Alertas")
+            col_f1, col_f2, col_f3 = st.columns([0.4, 0.3, 0.3])
+            with col_f1:
+                search_query = st.text_input("Buscar por texto", value="", key="search_query_val", placeholder="Escribe palabras clave...")
+            with col_f2:
+                unique_sources = sorted(list(set([a["source"] for a in st.session_state.alerts])))
+                selected_sources = st.multiselect("Filtrar por fuente", options=unique_sources, default=unique_sources, key="selected_sources_val")
+            with col_f3:
+                selected_sentiments = st.multiselect("Filtrar por sentimiento", options=["Positivo", "Neutral", "Negativo"], default=["Positivo", "Neutral", "Negativo"], key="selected_sentiments_val")
+                
+            filtered_alerts = []
+            for alert in st.session_state.alerts:
+                text_match = True
+                if search_query:
+                    q = search_query.lower()
+                    text_match = (q in alert["text"].lower()) or (q in alert["resumen"].lower()) or (q in alert["source"].lower())
+                
+                source_match = alert["source"] in selected_sources
+                sentiment_match = alert["sentimiento"] in selected_sentiments
+                
+                if text_match and source_match and sentiment_match:
+                    filtered_alerts.append(alert)
+        else:
+            filtered_alerts = []
+
         # Render alerts list
         if not st.session_state.alerts:
             st.info("💡 **Bandeja vacía.** Inicia el motor de monitoreo en la barra lateral para capturar menciones o espera a que se detecten eventos.")
@@ -588,12 +822,15 @@ with col_left:
                 <span>No hay menciones pendientes de validar en este momento.</span>
             </div>
             """, unsafe_allow_html=True)
+        elif not filtered_alerts:
+            st.info("💡 **Sin resultados.** Ninguna mención coincide con los filtros de búsqueda aplicados.")
         else:
             # Loop through alerts in session state
-            for idx, alert in enumerate(st.session_state.alerts):
+            for idx, alert in enumerate(filtered_alerts):
                 # Select icon
                 source_lower = alert["source"].lower()
                 if "radio" in source_lower: source_icon = "📻"
+                elif "tv" in source_lower: source_icon = "📺"
                 elif "youtube" in source_lower: source_icon = "🎥"
                 elif "rss" in source_lower: source_icon = "📰"
                 else: source_icon = "📸"
@@ -702,18 +939,33 @@ with col_left:
                                     st.audio(audio_bytes, format="audio/wav")
                                 except Exception as e:
                                     st.error(f"Error al reproducir audio: {e}")
+                                    
+                        # Render st.video player if video path exists for this mention and toggle is active
+                        video_path = alert.get("video_path")
+                        if video_path and os.path.exists(video_path):
+                            video_key = f"play_video_{alert['identifier']}"
+                            if video_key not in st.session_state:
+                                st.session_state[video_key] = False
+                            
+                            btn_label = "🔇 Ocultar Reproductor de Video" if st.session_state[video_key] else "📺 Ver Clip de Video"
+                            if st.button(btn_label, key=f"btn_{video_key}"):
+                                st.session_state[video_key] = not st.session_state[video_key]
+                                st.rerun()
+                            
+                            if st.session_state[video_key]:
+                                try:
+                                    with open(video_path, "rb") as f:
+                                        video_bytes = f.read()
+                                    st.video(video_bytes, format="video/mp4")
+                                except Exception as e:
+                                    st.error(f"Error al reproducir video: {e}")
                     with col_btn:
                         # Provide vertical spacer aligning button
                         st.write("")
                         st.write("")
                         st.write("")
                         if st.button("Aprobar", key=f"aprov_{alert['identifier']}", use_container_width=True):
-                            # Action: pop alert from list, save it, increment counters
-                            approved_alert = st.session_state.alerts.pop(idx)
-                            if "approved_alerts" not in st.session_state:
-                                st.session_state.approved_alerts = []
-                            st.session_state.approved_alerts.append(approved_alert)
-                            st.session_state.approved_count += 1
+                            database.update_alert_status(alert['identifier'], 'approved')
                             st.rerun()
                         
     with tab_report:
@@ -784,17 +1036,44 @@ with col_left:
             # --- Section 2: Formats & Downloads ---
             st.markdown("#### 📥 Descargar Reportes")
             
+            # Calculate sentiment and source counts for approved alerts
+            approved_total = len(st.session_state.approved_alerts)
+            app_pos = sum(1 for a in st.session_state.approved_alerts if a["sentimiento"] == "Positivo")
+            app_neu = sum(1 for a in st.session_state.approved_alerts if a["sentimiento"] == "Neutral")
+            app_neg = sum(1 for a in st.session_state.approved_alerts if a["sentimiento"] == "Negativo")
+            
+            app_sources = [a["source"] for a in st.session_state.approved_alerts]
+            app_radio = sum(1 for s in app_sources if "Radio" in s)
+            app_tv = sum(1 for s in app_sources if "TV" in s)
+            app_yt = sum(1 for s in app_sources if "YouTube" in s)
+            app_ig = sum(1 for s in app_sources if "Instagram" in s)
+            app_rss = sum(1 for s in app_sources if "RSS" in s)
+
             # 1. Compile Markdown
             report_md = f"# REPORTE DIARIO DE MONITOREO DE MEDIOS\n"
             report_md += f"**Fecha de Emisión:** {datetime.now().strftime('%Y-%m-%d %I:%M %p')}\n"
-            report_md += f"**Total Menciones Aprobadas:** {len(st.session_state.approved_alerts)}\n\n"
+            report_md += f"**Total Menciones Aprobadas:** {approved_total}\n\n"
+            
+            report_md += "## 📊 ESTADÍSTICAS DE COBERTURA\n\n"
+            report_md += "### Distribución de Sentimiento\n"
+            report_md += f"- **🟢 Positivo:** {app_pos} ({int(app_pos/approved_total*100) if approved_total > 0 else 0}%)\n"
+            report_md += f"- **🔵 Neutral:** {app_neu} ({int(app_neu/approved_total*100) if approved_total > 0 else 0}%)\n"
+            report_md += f"- **🔴 Negativo:** {app_neg} ({int(app_neg/approved_total*100) if approved_total > 0 else 0}%)\n\n"
+            
+            report_md += "### Impacto por Tipo de Medio\n"
+            report_md += f"- **📻 Radio:** {app_radio} menciones\n"
+            report_md += f"- **📺 TV:** {app_tv} menciones\n"
+            report_md += f"- **🎥 YouTube:** {app_yt} menciones\n"
+            report_md += f"- **📸 Instagram:** {app_ig} menciones\n"
+            report_md += f"- **📰 RSS:** {app_rss} menciones\n\n"
+            report_md += "---\n\n"
             
             if st.session_state.get("ai_summary_report"):
                 report_md += f"## 🤖 RESUMEN EJECUTIVO (IA)\n{st.session_state.ai_summary_report}\n\n"
                 
             report_md += "## 📋 DETALLE DE MENCIONES ENCONTRADAS\n\n"
             for a in st.session_state.approved_alerts:
-                source_icon = "📻" if "radio" in a["source"].lower() else ("🎥" if "youtube" in a["source"].lower() else ("📰" if "rss" in a["source"].lower() else "📸"))
+                source_icon = "📻" if "radio" in a["source"].lower() else ("📺" if "tv" in a["source"].lower() else ("🎥" if "youtube" in a["source"].lower() else ("📰" if "rss" in a["source"].lower() else "📸")))
                 formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%I:%M %p")
                 sentiment_str = "🟢 Positivo" if a["sentimiento"] == "Positivo" else ("🔴 Negativo" if a["sentimiento"] == "Negativo" else "🔵 Neutral")
                 
@@ -828,6 +1107,23 @@ with col_left:
                     if audio_uri:
                         report_md += f"**Audio Embebido:** [🎧 Escuchar Audio (Autónomo)]({audio_uri})\n\n"
                         
+                video_path = a.get("video_path")
+                if video_path and os.path.exists(video_path):
+                    # Ensure metadata exists
+                    if "metadata" not in a or a["metadata"] is None:
+                        a["metadata"] = {}
+                        
+                    # Upload to cloud if not already uploaded
+                    if "online_video_url" not in a["metadata"]:
+                        with st.spinner("Subiendo clip de video de TV a la nube..."):
+                            online_url = upload_to_catbox(video_path)
+                            if online_url:
+                                a["metadata"]["online_video_url"] = online_url
+                                
+                    online_url = a["metadata"].get("online_video_url")
+                    if online_url:
+                        report_md += f"**Video Online:** [🔗 Ver Video en Línea (Nube)]({online_url})\n\n"
+                        
                 report_md += "---\n\n"
                 
             # 2. Compile CSV
@@ -841,10 +1137,20 @@ with col_left:
                 link = a.get("metadata", {}).get("video_url") or a.get("metadata", {}).get("post_url") or ""
                 if not link and a.get("audio_path"):
                     link = a.get("metadata", {}).get("online_audio_url") or f"media/{os.path.basename(a['audio_path'])}"
+                if not link and a.get("video_path"):
+                    link = a.get("metadata", {}).get("online_video_url") or f"media/{os.path.basename(a['video_path'])}"
                 writer.writerow([formatted_time, a["source"], a["text"], a["resumen"], a["sentimiento"], link])
             csv_data = f.getvalue()
             
-            col_dl1, col_dl2 = st.columns(2)
+            # Render SMTP send results if available
+            if st.session_state.get("smtp_status") == "success":
+                st.success("✅ ¡Reporte enviado exitosamente por correo!")
+                st.session_state.smtp_status = None
+            elif st.session_state.get("smtp_status") == "error":
+                st.error(f"❌ Falló el envío del reporte por correo. Detalle: {st.session_state.smtp_result}")
+                st.session_state.smtp_status = None
+
+            col_dl1, col_dl2, col_dl3 = st.columns(3)
             with col_dl1:
                 st.download_button(
                      label="📥 Descargar Reporte en Markdown (.md)",
@@ -861,18 +1167,36 @@ with col_left:
                      mime="text/csv",
                      use_container_width=True
                 )
+            with col_dl3:
+                smtp_configured = bool(smtp_config.get("server") and smtp_config.get("user") and smtp_config.get("password") and smtp_config.get("to"))
+                btn_label = "⌛ Enviando..." if st.session_state.smtp_sending else "📧 Enviar por Correo"
+                if st.button(btn_label, use_container_width=True, disabled=not smtp_configured or st.session_state.smtp_sending, help="Envía este reporte diario a través de correo electrónico (SMTP) a la lista de destinatarios configurada."):
+                    st.session_state.smtp_sending = True
+                    st.session_state.smtp_status = "sending"
+                    import threading
+                    t = threading.Thread(
+                        target=send_email_report_thread, 
+                        args=(smtp_config, report_md, csv_data, st.session_state.get("ai_summary_report"))
+                    )
+                    t.start()
+                    st.rerun()
                  
             st.markdown("##### Vista Previa del Reporte:")
             st.code(report_md, language="markdown")
              
             st.markdown("---")
             if st.button("🧹 Limpiar Lista de Aprobados", type="secondary", use_container_width=True):
-                # Clean up any approved audio files
+                # Clean up any approved audio and video files
                 for a in st.session_state.approved_alerts:
                     ap = a.get("audio_path")
                     if ap and os.path.exists(ap):
                         try: os.remove(ap)
                         except Exception: pass
+                    vp = a.get("video_path")
+                    if vp and os.path.exists(vp):
+                        try: os.remove(vp)
+                        except Exception: pass
+                database.delete_alerts_by_status('approved')
                 st.session_state.approved_alerts = []
                 st.session_state.ai_summary_report = None
                 st.rerun()
@@ -883,15 +1207,23 @@ with col_right:
     # Graphic: Distribution by source
     sources = [a["source"] for a in st.session_state.alerts]
     radio_cnt = sum(1 for s in sources if "Radio" in s)
+    tv_cnt = sum(1 for s in sources if "TV" in s)
     yt_cnt = sum(1 for s in sources if "YouTube" in s)
     ig_cnt = sum(1 for s in sources if "Instagram" in s)
     rss_cnt = sum(1 for s in sources if "RSS" in s)
     
     st.markdown("##### Volumen por Canal")
     st.progress(radio_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📻 Radio ({radio_cnt})")
+    st.progress(tv_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📺 TV ({tv_cnt})")
     st.progress(yt_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"🎥 YouTube ({yt_cnt})")
     st.progress(ig_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📸 Instagram ({ig_cnt})")
     st.progress(rss_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📰 RSS ({rss_cnt})")
+    
+    st.markdown("---")
+    st.markdown("##### Distribución de Sentimiento")
+    st.progress(pos_count / total_mentions if total_mentions > 0 else 0.0, text=f"🟢 Positivo ({pos_count})")
+    st.progress(neu_count / total_mentions if total_mentions > 0 else 0.0, text=f"🔵 Neutral ({neu_count})")
+    st.progress(neg_count / total_mentions if total_mentions > 0 else 0.0, text=f"🔴 Negativo ({neg_count})")
     
     st.markdown("---")
     
@@ -903,9 +1235,20 @@ with col_right:
         else:
             for log in st.session_state.system_logs:
                 st.markdown(log)
+                
+    if st.session_state.system_logs:
+        clean_logs = "\n".join([log.replace("⏱️ `", "[").replace("`", "]") for log in st.session_state.system_logs])
+        st.download_button(
+            label="💾 Descargar Bitácora Completa (.txt)",
+            data=clean_logs,
+            file_name=f"bitacora_sistema_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
 
 # --- AUTO-REFRESH TRIGGER ---
-# If monitoring is active, trigger page rerun after 2 seconds to poll the background thread queue and render new alerts
-if st.session_state.monitoring_active:
-    time.sleep(2)
+# If monitoring is active or sending email, trigger page rerun after 2 seconds (or 1 second if sending) to poll the background thread queue and render updates
+if st.session_state.monitoring_active or st.session_state.get("smtp_sending", False):
+    interval = 1 if st.session_state.get("smtp_sending", False) else 2
+    time.sleep(interval)
     st.rerun()

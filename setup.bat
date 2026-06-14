@@ -11,9 +11,9 @@ python --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo [!] Python no esta instalado.
     echo [*] Descargando e instalando Python 3.11 de forma silenciosa...
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe' -OutFile 'python_installer.exe'"
-    echo [*] Ejecutando instalador de Python (acepta los permisos de Administrador si los solicita)...
-    python_installer.exe /quiet InstallAllUsers=1 PrependPath=1
+    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe' -OutFile 'python_installer.exe'"
+    echo [*] Ejecutando instalador de Python - acepta los permisos si los solicita...
+    python_installer.exe /quiet PrependPath=1
     del python_installer.exe
     echo [OK] Python instalado. Por favor, cierra este terminal y vuelve a ejecutar 'setup.bat'.
     pause
@@ -32,12 +32,12 @@ if %errorlevel% neq 0 (
     winget install --id Git.Git -e --silent --accept-source-agreements --accept-package-agreements >nul 2>&1
     if %errorlevel% neq 0 (
         echo [*] Winget no disponible o falló. Descargando instalador oficial de Git...
-        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe' -OutFile 'git_installer.exe'"
-        echo [*] Ejecutando instalador de Git de forma silenciosa (acepta permisos si lo solicita)...
+        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe' -OutFile 'git_installer.exe'"
+        echo [*] Ejecutando instalador de Git de forma silenciosa - acepta permisos si lo solicita...
         git_installer.exe /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS
         del git_installer.exe
     )
-    echo [OK] Git instalado. (Es posible que debas reiniciar la consola o la app para usar Git).
+    echo [OK] Git instalado. Es posible que debas reiniciar la consola o la app para usar Git.
 ) else (
     echo [OK] Git detectado.
 )
@@ -75,7 +75,7 @@ if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
         echo [OK] Ollama instalado.
     ) else (
         echo [*] Descargando e instalando Ollama en segundo plano...
-        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile 'OllamaSetup.exe'"
+        powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://ollama.com/download/OllamaSetup.exe' -OutFile 'OllamaSetup.exe'"
         start /wait OllamaSetup.exe /silent
         echo [OK] Ollama instalado.
     )
@@ -91,7 +91,11 @@ if exist "%LocalAppData%\Programs\Ollama\ollama app.exe" (
 )
 echo Esperando 10 segundos a que el servicio se inicialice...
 timeout /t 10 >nul
-ollama pull gemma:2b
+if exist "%LocalAppData%\Programs\Ollama\ollama.exe" (
+    "%LocalAppData%\Programs\Ollama\ollama.exe" pull gemma:2b
+) else (
+    ollama pull gemma:2b
+)
 echo [OK] Modelo gemma:2b descargado e instalado.
 
 echo.

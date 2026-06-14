@@ -1015,6 +1015,140 @@ class RSSScraper:
         }]
 
 
+# --- TV Scraper ---
+class TVScraper:
+    def __init__(self, name, stream_url, keywords, duration=20, whisper_model="tiny"):
+        self.name = name
+        self.stream_url = stream_url
+        self.keywords = keywords
+        self.duration = duration
+        self.whisper_model_name = whisper_model
+
+    def scrape(self):
+        import tempfile
+        temp_video = None
+        temp_audio = None
+        try:
+            # 1. Resolve URL with yt-dlp
+            import yt_dlp
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'skip_download': True,
+            }
+            resolved_url = self.stream_url
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                try:
+                    info = ydl.extract_info(self.stream_url, download=False)
+                    if 'url' in info:
+                        resolved_url = info['url']
+                    elif 'formats' in info and len(info['formats']) > 0:
+                        resolved_url = info['formats'][0]['url']
+                except Exception:
+                    pass
+
+            # 2. Check ffmpeg and record video + audio
+            ffmpeg_bin = get_ffmpeg_path()
+            if not ffmpeg_bin:
+                raise FileNotFoundError("ffmpeg not found in PATH or Playwright cache")
+                
+            temp_dir = tempfile.gettempdir()
+            ts = int(time.time())
+            temp_video = os.path.join(temp_dir, f"tv_temp_{ts}.mp4")
+            temp_audio = os.path.join(temp_dir, f"tv_temp_{ts}.wav")
+            
+            # Record video (MP4) from live stream for duration seconds
+            cmd_video = [
+                ffmpeg_bin, "-y", "-i", resolved_url, "-t", str(self.duration),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                "-c:a", "aac", "-ac", "1", "-ar", "16000", temp_video
+            ]
+            
+            result = subprocess.run(cmd_video, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=self.duration + 20)
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg video recording failed: {result.stderr.decode('utf-8', errors='ignore')}")
+                
+            # Extract audio track to WAV mono 16kHz
+            cmd_audio = [
+                ffmpeg_bin, "-y", "-i", temp_video, "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", temp_audio
+            ]
+            subprocess.run(cmd_audio, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+            
+            if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) == 0:
+                raise RuntimeError("Failed to extract audio track from video clip")
+                
+            # 3. Transcribe with Whisper
+            model = get_whisper_model(self.whisper_model_name)
+            transcription = model.transcribe(temp_audio, language="es")
+            text = transcription.get("text", "")
+            
+            if os.path.exists(temp_audio):
+                try: os.remove(temp_audio)
+                except Exception: pass
+                
+            # 4. Keyword Match
+            found_kws = contains_keywords(text, self.keywords)
+            if found_kws:
+                # Save video to media directory
+                media_dir = os.path.join(os.getcwd(), "media")
+                os.makedirs(media_dir, exist_ok=True)
+                video_filename = f"tv_{ts}.mp4"
+                persistent_path = os.path.join(media_dir, video_filename)
+                
+                try:
+                    shutil.move(temp_video, persistent_path)
+                    video_ref = persistent_path
+                except Exception:
+                    video_ref = temp_video
+                    
+                return [{
+                    "source": f"TV ({self.name})",
+                    "text": text.strip(),
+                    "keywords": found_kws,
+                    "timestamp": time.time(),
+                    "identifier": f"tv_{ts}",
+                    "simulated": False,
+                    "video_path": video_ref
+                }]
+            else:
+                # Clean up video file if no keyword matches
+                if os.path.exists(temp_video):
+                    try: os.remove(temp_video)
+                    except Exception: pass
+                return []
+                
+        except Exception as e:
+            for path in [temp_video, temp_audio]:
+                if path and os.path.exists(path):
+                    try: os.remove(path)
+                    except Exception: pass
+            diagnostic = f"Real-mode failed ({type(e).__name__}: {str(e)})."
+            return self.get_simulated_mention(diagnostic)
+
+    def get_simulated_mention(self, diagnostic_msg=None):
+        if random.random() > 0.3:
+            return []
+            
+        templates = [
+            "En el debate televisado de hoy, los ministros defendieron el plan nacional de desarrollo y el presupuesto asignado por el presidente.",
+            "Reportajes especiales de televisión revelan el descontento de la población con el aumento del costo de la canasta básica y la inflación.",
+            "Analistas políticos discuten en vivo sobre la transparencia electoral y las reformas del congreso propuestas por el partido de gobierno.",
+            "La cobertura de prensa televisiva de esta noche destaca el impacto social de la nueva reforma fiscal en el sector empresarial."
+        ]
+        text = random.choice(templates)
+        found_kws = contains_keywords(text, self.keywords)
+        
+        return [{
+            "source": f"TV ({self.name})",
+            "text": text,
+            "keywords": found_kws,
+            "timestamp": time.time(),
+            "identifier": f"tv_sim_{int(time.time())}",
+            "simulated": True,
+            "diagnostic": diagnostic_msg
+        }]
+
+
 # --- AI Ollama Analyzer ---
 class OllamaAnalyzer:
     def __init__(self, model_name="gemma:2b"):
@@ -1142,7 +1276,7 @@ class OllamaAnalyzer:
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma:2b", instagram_sessionid=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma:2b", instagram_sessionid=None):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -1154,6 +1288,7 @@ class MonitoringEngine:
         self.youtube_channels = youtube_channels or []
         self.instagram_channels = instagram_channels or []
         self.rss_feeds = rss_feeds or []
+        self.tv_channels = tv_channels or []
         
         # Fallbacks to defaults if everything is empty
         if not self.radio_channels:
@@ -1164,6 +1299,8 @@ class MonitoringEngine:
             self.instagram_channels = ["nuriapiera"]
         if not self.rss_feeds:
             self.rss_feeds = ["https://somospueblo.com/feed/"]
+        if not self.tv_channels:
+            self.tv_channels = [{"name": "CDN 37", "url": "https://www.youtube.com/watch?v=h34A93R1g3E"}]
         
         self.alerts_queue = queue.Queue()
         self.logs_queue = queue.Queue()
@@ -1185,6 +1322,8 @@ class MonitoringEngine:
             self.scrapers.append(InstagramScraper(username=ig, keywords=self.keywords, sessionid=self.instagram_sessionid))
         for rss in self.rss_feeds:
             self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
+        for tv in self.tv_channels:
+            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model))
             
         self.analyzer = OllamaAnalyzer(self.ollama_model)
 
@@ -1217,7 +1356,7 @@ class MonitoringEngine:
             # Update scraper configurations dynamically
             for scraper in self.scrapers:
                 scraper.keywords = self.keywords
-                if isinstance(scraper, RadioScraper):
+                if isinstance(scraper, RadioScraper) or isinstance(scraper, TVScraper):
                     scraper.whisper_model_name = self.whisper_model
                 elif isinstance(scraper, InstagramScraper):
                     scraper.sessionid = self.instagram_sessionid
@@ -1241,7 +1380,7 @@ class MonitoringEngine:
                                 futures[executor.submit(scraper.scrape, self)] = scraper
                             elif isinstance(scraper, RSSScraper) or isinstance(scraper, InstagramScraper):
                                 futures[executor.submit(scraper.scrape, self)] = scraper
-                            elif isinstance(scraper, RadioScraper):
+                            elif isinstance(scraper, RadioScraper) or isinstance(scraper, TVScraper):
                                 futures[executor.submit(scraper.scrape)] = scraper
                                 
                     for future in as_completed(futures):
@@ -1253,6 +1392,8 @@ class MonitoringEngine:
                         except Exception as exc:
                             if isinstance(scraper, RadioScraper):
                                 id_str = f"Radio ({scraper.name})"
+                            elif isinstance(scraper, TVScraper):
+                                id_str = f"TV ({scraper.name})"
                             elif isinstance(scraper, YouTubeScraper):
                                 id_str = f"YouTube ({scraper.channel_name})"
                             elif isinstance(scraper, InstagramScraper):
@@ -1302,7 +1443,10 @@ class MonitoringEngine:
                 "metadata": m.get("metadata", {}),
                 "simulated": m.get("simulated", False),
                 "diagnostic": m.get("diagnostic") or analysis.get("diagnostic"),
-                "audio_path": m.get("audio_path")
+                "audio_path": m.get("audio_path"),
+                "video_path": m.get("video_path")
             }
+            # Save to SQLite database
+            database.save_alert(alert, status='pending')
             
             self.alerts_queue.put(alert)
