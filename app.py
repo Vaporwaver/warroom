@@ -607,6 +607,22 @@ Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kpt
 Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_ee0c4e703a7311f18cbf95410dc72949/index.fmp4.m3u8
 VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
 
+    DEFAULT_RSS_FEEDS = """https://www.diariolibre.com/rss/portada.xml
+https://eldia.com.do/feed/
+https://www.elcaribe.com.do/feed/
+https://elnuevodiario.com.do/feed/
+https://listindiario.com/rss/
+https://hoy.com.do/feed/
+https://remolacha.net/feed/
+https://elnacional.com.do/feed/
+https://acento.com.do/feed/
+https://almomento.net/feed/
+https://noticiassin.com/feed/
+https://deultimominuto.net/feed/
+https://z101digital.com/feed/
+https://eldinero.com.do/feed/
+https://cdn.com.do/feed/"""
+
     st.sidebar.text_area(
         "Emisoras de Radio (Nombre | URL)",
         value=DEFAULT_RADIO_CHANNELS,
@@ -633,7 +649,7 @@ VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
     )
     st.sidebar.text_area(
         "Feeds RSS (URLs)",
-        value="https://somospueblo.com/feed/\nhttps://listindiario.com/rss/",
+        value=DEFAULT_RSS_FEEDS,
         key="rss_feeds_val",
         help="Ingresa una URL de feed RSS por línea."
     )
