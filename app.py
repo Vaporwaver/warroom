@@ -544,15 +544,78 @@ if not st.session_state.monitoring_active:
     )
     st.session_state.keywords_str = st.session_state.keywords_input_state
     
+    DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/q1y9wz4r7uquv
+CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
+Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
+Escándalo 102.5 | https://stream.zeno.fm/1fbf8rrgvzzuv
+Estación 97.7 | https://stream2.rcast.net/61187
+Fidelity (94.1) | https://stream.fidelityfm.com.do/fidelity
+Independencia (93.3) | http://stream.grupotelemicro.com:9303/;stream.mp3
+La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
+La Bakana (105.7) | https://stream.zeno.fm/8x9cd7buqg8uv
+La Nota Diferente | https://stream.zeno.fm/r1y9wz4r7uquv
+La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
+La Voz FF.AA. (HIFA) | https://stream.hifa.mil.do/hifa
+La X 102.1 | https://audio.livecastnet.com:2535/stream
+La Z101 FM | https://streaming.z101digital.com/z101
+Latidos FM (93.7) | https://stream.zeno.fm/latidos
+Los 40 (103.3) | https://stream.zeno.fm/sse58hcighnvv?dist=play
+Pura Vida (96.7) | https://stream.zeno.fm/7x9cd7buqg8uv
+Radio Monumental | https://radio2.grupointernet.com:8103/stream
+Ritmo 96.5 FM | https://stream-49.zeno.fm/y0br5ck4ququv
+Rumba FM | https://stream.telemicro.com.do/rumba
+Sentido 89.3 | https://stream.zeno.fm/3x9cd7buqg8uv
+Súper Q 100.9 | https://stream.zeno.fm/4x9cd7buqg8uv
+Top Latina 101.7 | https://stream.zeno.fm/5x9cd7buqg8uv
+Turbo 98 FM | https://stream.zeno.fm/6x9cd7buqg8uv
+Zol 106.5 FM | https://stream.zeno.fm/zolfm1065"""
+
+    DEFAULT_TV_CHANNELS = """Acento TV | https://acentotv01.streamprolive.com/hls/live.m3u8
+Ahora TV | https://stream.haislin.com/ahoratv/index.m3u8
+Amé (Canal 47) | https://ss2.tvrdomi.com:1936/ame47/ame47/playlist.m3u8
+Antena 7 | https://d3mhrz6vhsrmmq.cloudfront.net/index.m3u8
+Boreal Televisión | https://edge.essastream.com/borealtelevision/tracks-v1a1/mono.m3u8
+Canal del Sol | https://stream.canaldelsol.com/sol26/live_1080.m3u8
+Canal Seis | https://stream.elseis.do/canal6/live_1080.m3u8
+CDN | http://200.125.170.121:8000/play/a09j/index.m3u8
+Cibao Súper TV (Canal 55) | https://ss2.tvrdomi.com:1936/supertv55/supertv55/playlist.m3u8
+Cine Visión 19 | https://5790d294af2dc.streamlock.net/tvhdlive/tvhdlive/playlist.m3u8
+Color Vision | http://190.122.104.210:5080/LiveApp/streams/cvision1.m3u8
+Coral TV | https://www.youtube.com/@Coral39RD/live
+Digital Quince | http://190.122.104.210:5080/LiveApp/streams/Di15.m3u8
+El Demócrata | https://www.youtube.com/@ElDemocrata/live
+El Nuevo Diario TV | https://nuevodiario01.streamprolive.com/hls/live.m3u8
+En Televisión (Canal 31) | https://stream.haislin.com/entelevision/index.m3u8
+Hilando Fino TV | https://hilandofinotv.essastream.com:3606/live/canalhilandofinotvlive.m3u8
+Luna TV (Canal 53) | https://tv.wracanal10.com:3671/live/lunatvcanal53live.m3u8
+Mia Visión | https://edge.essastream.com/miavisiontv/playlist.m3u8
+Microvisión (Canal 10) | https://streaming.telecablecentral.com.do/live/MicroHD/playlist.m3u8
+RNN | https://2-fss-2.streamhoster.com/pl_138/206532-6829902-1/playlist.m3u8
+RTVD (Canal 4) | https://protvradiostream.com:1936/canal4rd-1/ngrp:canal4rd-1_all/playlist.m3u8
+Su Mundo TV | https://appapi.sumundotv.com/api/stream-proxy/4pf8yy3WF1xp1_tQ6yUYRIsbwyLc3qxDRcZAY_NLNDs/playlist.m3u8
+Súper Canal | https://cnn.hostlagarto.com/supercanalhd/playlist.m3u8
+Teleantillas | http://200.125.170.122:8000/play/a0cg/index.m3u8
+Telecentro | http://190.122.104.210:5080/LiveApp/streams/tcentro.m3u8
+Telecontacto (Canal 57) | https://streaming.grupomediosdelnorte.com:19360/telecontacto/telecontacto.m3u8
+Telemedios 25 | https://www.youtube.com/@Canal25RD/live
+Telemicro | https://live4.telemicro.com.do/live/telemicrocast_1080p/playlist.m3u8
+TeleNord | https://fox.hostlagarto.com:8081/telenord8/playlist.m3u8
+Teleradioamérica | https://soportedvb.click:3020/live/teleradioamericalive.m3u8
+Telesistema | http://200.125.170.122:8000/play/a0ci/index.m3u8
+Teleunion (Canal 16) | http://server2grupocam.com:1945/teleunion/TU/playlist.m3u8
+Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kptjeckkaa.m3u8
+Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_ee0c4e703a7311f18cbf95410dc72949/index.fmp4.m3u8
+VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
+
     st.sidebar.text_area(
         "Emisoras de Radio (Nombre | URL)",
-        value="Z101 | https://tunein.com/radio/Z101FM-1013-s102394/\nLa Bakana | https://tunein.com/radio/La-Bakana-1057-s102393/",
+        value=DEFAULT_RADIO_CHANNELS,
         key="radio_channels_val",
         help="Ingresa Nombre | URL de streaming de audio por línea."
     )
     st.sidebar.text_area(
         "Canales de TV (Nombre | URL)",
-        value="CDN 37 | https://www.youtube.com/watch?v=h34A93R1g3E\nColor Vision | https://www.youtube.com/watch?v=h34A93R1g3E",
+        value=DEFAULT_TV_CHANNELS,
         key="tv_channels_val",
         help="Ingresa Nombre | URL de streaming de video por línea."
     )
