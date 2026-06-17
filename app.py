@@ -417,7 +417,10 @@ if "force_simulation" not in st.session_state:
     st.session_state.force_simulation = missing_deps
 
 # --- SIDEBAR: Configuration & Control ---
-st.sidebar.image("https://img.icons8.com/nolan/128/war.png", width=80)
+if os.path.exists("assets/logo.png"):
+    st.sidebar.image("assets/logo.png", use_container_width=True)
+else:
+    st.sidebar.image("https://img.icons8.com/nolan/128/war.png", width=80)
 st.sidebar.markdown("<h2 style='margin-top:0;'>Centro de Control</h2>", unsafe_allow_html=True)
 
 # Main Engine Controls
