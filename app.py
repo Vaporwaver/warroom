@@ -780,17 +780,17 @@ if st.sidebar.button("🧹 Resetear Caché y Enfriamientos", use_container_width
     st.sidebar.success("✅ Caché y enfriamientos restablecidos con éxito.")
 
 st.sidebar.markdown("### ⚙️ Actualizaciones")
-if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True):
-    with st.spinner("Buscando e instalando actualizaciones..."):
-        try:
-            import subprocess
-            # Check if git is available and inside a work tree
-            res_status = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, timeout=5)
-            is_git = (res_status.returncode == 0)
-        except (FileNotFoundError, Exception):
-            is_git = False
+try:
+    import subprocess
+    # Check if git is available and inside a work tree
+    res_status = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, timeout=5)
+    is_git = (res_status.returncode == 0)
+except (FileNotFoundError, Exception):
+    is_git = False
 
-        if is_git:
+if is_git:
+    if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True, key="git_update_btn"):
+        with st.spinner("Buscando e instalando actualizaciones..."):
             try:
                 # Run git pull
                 res = subprocess.run(["git", "pull"], capture_output=True, text=True, timeout=20)
@@ -810,196 +810,196 @@ if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True):
                     st.sidebar.error(f"Error al conectar con el repositorio. Detalle: {res.stderr[:100]}")
             except Exception as e:
                 st.sidebar.error(f"Error al actualizar via Git: {e}")
-        else:
-            # ZIP-based update fallback for private repositories
-            github_token = database.get_state("github_token", "")
-            
-            st.sidebar.warning("📦 Instalación ZIP (Repositorio Privado)")
-            
-            github_token_val = st.sidebar.text_input(
-                "GitHub Token (PAT)", 
-                value=github_token, 
-                type="password", 
-                help="Requerido para la descarga automática desde el repositorio privado. Consigue un PAT en tu cuenta de GitHub con acceso de lectura (read:packages o repo).",
-                key="github_token_input"
-            )
-            if github_token_val != github_token:
-                database.set_state("github_token", github_token_val)
-                st.rerun()
-            
-            if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True):
-                with st.spinner("Buscando e instalando actualizaciones desde GitHub..."):
+else:
+    # ZIP-based update fallback for private repositories
+    github_token = database.get_state("github_token", "")
+    
+    st.sidebar.warning("📦 Instalación ZIP (Repositorio Privado)")
+    
+    github_token_val = st.sidebar.text_input(
+        "GitHub Token (PAT)", 
+        value=github_token, 
+        type="password", 
+        help="Requerido para la descarga automática desde el repositorio privado. Consigue un PAT en tu cuenta de GitHub con acceso de lectura (read:packages o repo).",
+        key="github_token_input"
+    )
+    if github_token_val != github_token:
+        database.set_state("github_token", github_token_val)
+        st.rerun()
+    
+    if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True, key="zip_update_btn"):
+        with st.spinner("Buscando e instalando actualizaciones desde GitHub..."):
+            try:
+                import urllib.request
+                import zipfile
+                import io
+                import shutil
+                import subprocess
+                
+                zip_data = None
+                
+                # 1. Try public download first (anonymous)
+                try:
+                    public_url = "https://github.com/Vaporwaver/warroom/archive/refs/heads/main.zip"
+                    req = urllib.request.Request(
+                        public_url, 
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                    )
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        zip_data = response.read()
+                except Exception:
+                    # 2. If public fails, fall back to authenticated token download
+                    if github_token_val:
+                        private_url = "https://api.github.com/repos/Vaporwaver/warroom/zipball/main"
+                        req = urllib.request.Request(
+                            private_url, 
+                            headers={
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                                'Authorization': f'Bearer {github_token_val}'
+                            }
+                        )
+                        with urllib.request.urlopen(req, timeout=20) as response:
+                            zip_data = response.read()
+                    else:
+                        raise Exception("El repositorio es privado o inaccesible. Configure un GitHub Token en la barra lateral o use la opción manual subiendo el archivo ZIP.")
+                
+                if not zip_data:
+                    raise Exception("No se obtuvieron datos de la actualización.")
+                    
+                st.sidebar.info("📂 Extrayendo y aplicando actualización...")
+                temp_dir = os.path.join(os.getcwd(), "temp_update")
+                if os.path.exists(temp_dir):
                     try:
-                        import urllib.request
-                        import zipfile
-                        import io
-                        import shutil
-                        import subprocess
+                        shutil.rmtree(temp_dir)
+                    except Exception:
+                        pass
+                os.makedirs(temp_dir)
+                
+                with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                
+                dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
+                extracted_root = temp_dir
+                if dirs:
+                    test_root = os.path.join(temp_dir, dirs[0])
+                    if os.path.exists(os.path.join(test_root, "app.py")):
+                        extracted_root = test_root
+                
+                # Copy files
+                for root_dir, subdirs, files in os.walk(extracted_root):
+                    rel_path = os.path.relpath(root_dir, extracted_root)
+                    dest_dir = os.path.normpath(os.path.join(os.getcwd(), rel_path)) if rel_path != "." else os.getcwd()
+                    
+                    dest_dir_lower = dest_dir.lower()
+                    if "temp_update" in dest_dir_lower or "venv" in dest_dir_lower or "static" in dest_dir_lower:
+                        continue
                         
-                        zip_data = None
+                    if not os.path.exists(dest_dir):
+                        os.makedirs(dest_dir)
                         
-                        # 1. Try public download first (anonymous)
-                        try:
-                            public_url = "https://github.com/Vaporwaver/warroom/archive/refs/heads/main.zip"
-                            req = urllib.request.Request(
-                                public_url, 
-                                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-                            )
-                            with urllib.request.urlopen(req, timeout=15) as response:
-                                zip_data = response.read()
-                        except Exception:
-                            # 2. If public fails, fall back to authenticated token download
-                            if github_token_val:
-                                private_url = "https://api.github.com/repos/Vaporwaver/warroom/zipball/main"
-                                req = urllib.request.Request(
-                                    private_url, 
-                                    headers={
-                                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-                                        'Authorization': f'Bearer {github_token_val}'
-                                    }
-                                )
-                                with urllib.request.urlopen(req, timeout=20) as response:
-                                    zip_data = response.read()
-                            else:
-                                raise Exception("El repositorio es privado o inaccesible. Configure un GitHub Token en la barra lateral o use la opción manual subiendo el archivo ZIP.")
+                    for file in files:
+                        src_file = os.path.join(root_dir, file)
+                        dest_file = os.path.join(dest_dir, file)
                         
-                        if not zip_data:
-                            raise Exception("No se obtuvieron datos de la actualización.")
+                        if file.lower() == "db.sqlite":
+                            continue
                             
-                        st.sidebar.info("📂 Extrayendo y aplicando actualización...")
-                        temp_dir = os.path.join(os.getcwd(), "temp_update")
-                        if os.path.exists(temp_dir):
-                            try:
-                                shutil.rmtree(temp_dir)
-                            except Exception:
-                                pass
-                        os.makedirs(temp_dir)
-                        
-                        with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
-                            zip_ref.extractall(temp_dir)
-                        
-                        dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
-                        extracted_root = temp_dir
-                        if dirs:
-                            test_root = os.path.join(temp_dir, dirs[0])
-                            if os.path.exists(os.path.join(test_root, "app.py")):
-                                extracted_root = test_root
-                        
-                        # Copy files
-                        for root_dir, subdirs, files in os.walk(extracted_root):
-                            rel_path = os.path.relpath(root_dir, extracted_root)
-                            dest_dir = os.path.normpath(os.path.join(os.getcwd(), rel_path)) if rel_path != "." else os.getcwd()
-                            
-                            dest_dir_lower = dest_dir.lower()
-                            if "temp_update" in dest_dir_lower or "venv" in dest_dir_lower or "static" in dest_dir_lower:
-                                continue
-                                
-                            if not os.path.exists(dest_dir):
-                                os.makedirs(dest_dir)
-                                
-                            for file in files:
-                                src_file = os.path.join(root_dir, file)
-                                dest_file = os.path.join(dest_dir, file)
-                                
-                                if file.lower() == "db.sqlite":
-                                    continue
-                                    
-                                shutil.copy2(src_file, dest_file)
-                        
+                        shutil.copy2(src_file, dest_file)
+                
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+                
+                st.sidebar.success("🎉 ¡Actualización aplicada con éxito! Instalando dependencias...")
+                
+                # Re-run requirements installation
+                pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
+                if not os.path.exists(pip_path):
+                    pip_path = "pip" # Fallback
+                subprocess.run([pip_path, "install", "-r", "requirements.txt"])
+                
+                st.sidebar.info("Reiniciando aplicación...")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Error al actualizar desde el ZIP: {e}")
+
+    # Manual Update Options
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**Actualización Manual (Sin Token)**")
+    st.sidebar.markdown(
+        "[📥 Descargar ZIP desde GitHub](https://github.com/Vaporwaver/warroom/archive/refs/heads/main.zip)", 
+        help="Abre GitHub en tu navegador para descargar el archivo ZIP directamente (requiere estar logueado en tu cuenta con acceso al repositorio)."
+    )
+    
+    uploaded_zip = st.sidebar.file_uploader("Cargar archivo ZIP descargado", type=["zip"], key="uploaded_zip_sidebar")
+    if uploaded_zip is not None:
+        if st.sidebar.button("🚀 Aplicar ZIP cargado", use_container_width=True, key="manual_zip_apply_btn"):
+            with st.spinner("Aplicando actualización desde el archivo cargado..."):
+                try:
+                    import zipfile
+                    import io
+                    import shutil
+                    import subprocess
+                    
+                    zip_data = uploaded_zip.read()
+                    
+                    temp_dir = os.path.join(os.getcwd(), "temp_update")
+                    if os.path.exists(temp_dir):
                         try:
                             shutil.rmtree(temp_dir)
                         except Exception:
                             pass
+                    os.makedirs(temp_dir)
+                    
+                    with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
+                        zip_ref.extractall(temp_dir)
+                    
+                    dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
+                    extracted_root = temp_dir
+                    if dirs:
+                        test_root = os.path.join(temp_dir, dirs[0])
+                        if os.path.exists(os.path.join(test_root, "app.py")):
+                            extracted_root = test_root
+                    
+                    # Copy files
+                    for root_dir, subdirs, files in os.walk(extracted_root):
+                        rel_path = os.path.relpath(root_dir, extracted_root)
+                        dest_dir = os.path.normpath(os.path.join(os.getcwd(), rel_path)) if rel_path != "." else os.getcwd()
                         
-                        st.sidebar.success("🎉 ¡Actualización aplicada con éxito! Instalando dependencias...")
-                        
-                        # Re-run requirements installation
-                        pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
-                        if not os.path.exists(pip_path):
-                            pip_path = "pip" # Fallback
-                        subprocess.run([pip_path, "install", "-r", "requirements.txt"])
-                        
-                        st.sidebar.info("Reiniciando aplicación...")
-                        st.rerun()
-                    except Exception as e:
-                        st.sidebar.error(f"Error al actualizar desde el ZIP: {e}")
-
-            # Manual Update Options
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("**Actualización Manual (Sin Token)**")
-            st.sidebar.markdown(
-                "[📥 Descargar ZIP desde GitHub](https://github.com/Vaporwaver/warroom/archive/refs/heads/main.zip)", 
-                help="Abre GitHub en tu navegador para descargar el archivo ZIP directamente (requiere estar logueado en tu cuenta con acceso al repositorio)."
-            )
-            
-            uploaded_zip = st.sidebar.file_uploader("Cargar archivo ZIP descargado", type=["zip"], key="uploaded_zip_sidebar")
-            if uploaded_zip is not None:
-                if st.sidebar.button("🚀 Aplicar ZIP cargado", use_container_width=True):
-                    with st.spinner("Aplicando actualización desde el archivo cargado..."):
-                        try:
-                            import zipfile
-                            import io
-                            import shutil
-                            import subprocess
+                        dest_dir_lower = dest_dir.lower()
+                        if "temp_update" in dest_dir_lower or "venv" in dest_dir_lower or "static" in dest_dir_lower:
+                            continue
                             
-                            zip_data = uploaded_zip.read()
+                        if not os.path.exists(dest_dir):
+                            os.makedirs(dest_dir)
                             
-                            temp_dir = os.path.join(os.getcwd(), "temp_update")
-                            if os.path.exists(temp_dir):
-                                try:
-                                    shutil.rmtree(temp_dir)
-                                except Exception:
-                                    pass
-                            os.makedirs(temp_dir)
+                        for file in files:
+                            src_file = os.path.join(root_dir, file)
+                            dest_file = os.path.join(dest_dir, file)
                             
-                            with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
-                                zip_ref.extractall(temp_dir)
-                            
-                            dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
-                            extracted_root = temp_dir
-                            if dirs:
-                                test_root = os.path.join(temp_dir, dirs[0])
-                                if os.path.exists(os.path.join(test_root, "app.py")):
-                                    extracted_root = test_root
-                            
-                            # Copy files
-                            for root_dir, subdirs, files in os.walk(extracted_root):
-                                rel_path = os.path.relpath(root_dir, extracted_root)
-                                dest_dir = os.path.normpath(os.path.join(os.getcwd(), rel_path)) if rel_path != "." else os.getcwd()
+                            if file.lower() == "db.sqlite":
+                                continue
                                 
-                                dest_dir_lower = dest_dir.lower()
-                                if "temp_update" in dest_dir_lower or "venv" in dest_dir_lower or "static" in dest_dir_lower:
-                                    continue
-                                    
-                                if not os.path.exists(dest_dir):
-                                    os.makedirs(dest_dir)
-                                    
-                                for file in files:
-                                    src_file = os.path.join(root_dir, file)
-                                    dest_file = os.path.join(dest_dir, file)
-                                    
-                                    if file.lower() == "db.sqlite":
-                                        continue
-                                        
-                                    shutil.copy2(src_file, dest_file)
-                            
-                            try:
-                                shutil.rmtree(temp_dir)
-                            except Exception:
-                                pass
-                            
-                            st.sidebar.success("🎉 ¡Actualización del ZIP aplicada! Instalando dependencias...")
-                            
-                            # Re-run requirements
-                            pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
-                            if not os.path.exists(pip_path):
-                                pip_path = "pip"
-                            subprocess.run([pip_path, "install", "-r", "requirements.txt"])
-                            
-                            st.sidebar.info("Reiniciando aplicación...")
-                            st.rerun()
-                        except Exception as e:
-                            st.sidebar.error(f"Error al aplicar el archivo ZIP: {e}")
+                            shutil.copy2(src_file, dest_file)
+                    
+                    try:
+                        shutil.rmtree(temp_dir)
+                    except Exception:
+                        pass
+                    
+                    st.sidebar.success("🎉 ¡Actualización del ZIP aplicada! Instalando dependencias...")
+                    
+                    # Re-run requirements
+                    pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
+                    if not os.path.exists(pip_path):
+                        pip_path = "pip"
+                    subprocess.run([pip_path, "install", "-r", "requirements.txt"])
+                    
+                    st.sidebar.info("Reiniciando aplicación...")
+                    st.rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Error al aplicar el archivo ZIP: {e}")
 
 
 
