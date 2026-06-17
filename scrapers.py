@@ -254,9 +254,7 @@ class RadioScraper:
             if temp_audio and os.path.exists(temp_audio):
                 try: os.remove(temp_audio)
                 except Exception: pass
-            # Failure fallback to simulator
-            diagnostic = f"Real-mode failed ({type(e).__name__}: {str(e)})."
-            return self.get_simulated_mention(diagnostic)
+            raise e
 
     def get_simulated_mention(self, diagnostic_msg=None):
         # 30% probability of generating simulated radio mention per cycle to emulate live radio hits
@@ -1122,8 +1120,7 @@ class TVScraper:
                 if path and os.path.exists(path):
                     try: os.remove(path)
                     except Exception: pass
-            diagnostic = f"Real-mode failed ({type(e).__name__}: {str(e)})."
-            return self.get_simulated_mention(diagnostic)
+            raise e
 
     def get_simulated_mention(self, diagnostic_msg=None):
         if random.random() > 0.3:
@@ -1273,6 +1270,23 @@ class OllamaAnalyzer:
             "resumen": resumen
         }
 
+def get_scraper_display_name(scraper):
+    if isinstance(scraper, RadioScraper):
+        return f"📻 Radio ({scraper.name})"
+    elif isinstance(scraper, TVScraper):
+        return f"📺 TV ({scraper.name})"
+    elif isinstance(scraper, YouTubeScraper):
+        name = getattr(scraper, "channel_name", "") or scraper.channel_url
+        if name.startswith("http"):
+            if "/@" in name:
+                name = "@" + name.split("/@")[-1].split("/")[0]
+        return f"🎥 YouTube ({name})"
+    elif isinstance(scraper, InstagramScraper):
+        return f"📸 Instagram (@{scraper.username})"
+    elif isinstance(scraper, RSSScraper):
+        return f"📰 RSS ({scraper.feed_name})"
+    return str(scraper)
+
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
@@ -1283,6 +1297,7 @@ class MonitoringEngine:
         self.whisper_model = whisper_model
         self.ollama_model = ollama_model
         self.instagram_sessionid = instagram_sessionid
+        self.uptime_status = {}
         
         self.radio_channels = radio_channels or []
         self.youtube_channels = youtube_channels or []
@@ -1397,24 +1412,23 @@ class MonitoringEngine:
                                 
                     for future in as_completed(futures):
                         scraper = futures[future]
+                        name = get_scraper_display_name(scraper)
                         try:
                             mentions = future.result()
                             if mentions:
                                 self._process_mentions(mentions)
+                            self.uptime_status[name] = {
+                                "status": "Simulando" if self.force_simulation else "Online",
+                                "last_checked": time.time(),
+                                "error": ""
+                            }
                         except Exception as exc:
-                            if isinstance(scraper, RadioScraper):
-                                id_str = f"Radio ({scraper.name})"
-                            elif isinstance(scraper, TVScraper):
-                                id_str = f"TV ({scraper.name})"
-                            elif isinstance(scraper, YouTubeScraper):
-                                id_str = f"YouTube ({scraper.channel_name})"
-                            elif isinstance(scraper, InstagramScraper):
-                                id_str = f"Instagram (@{scraper.username})"
-                            elif isinstance(scraper, RSSScraper):
-                                id_str = f"RSS ({scraper.feed_name})"
-                            else:
-                                id_str = str(scraper)
-                            self.log_event(f"Error ejecutando scraper {id_str}: {exc}")
+                            self.uptime_status[name] = {
+                                "status": "Offline",
+                                "last_checked": time.time(),
+                                "error": str(exc)
+                            }
+                            self.log_event(f"Error ejecutando scraper {name}: {exc}")
             
             self.log_event("Ciclo de monitoreo paralelo completado. Esperando intervalo...")
             # Sleep in increments of 1 second checking stop event to remain responsive

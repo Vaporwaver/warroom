@@ -1525,6 +1525,26 @@ with col_right:
     st.progress(neu_count / total_mentions if total_mentions > 0 else 0.0, text=f"🔵 Neutral ({neu_count})")
     st.progress(neg_count / total_mentions if total_mentions > 0 else 0.0, text=f"🔴 Negativo ({neg_count})")
     
+    # --- Media Uptime Panel ---
+    if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
+        engine = st.session_state.engine
+        if hasattr(engine, "uptime_status") and engine.uptime_status:
+            st.markdown("---")
+            st.subheader("🟢 Uptime de Medios")
+            for name, info in sorted(engine.uptime_status.items()):
+                status = info["status"]
+                err = info["error"]
+                if status == "Online":
+                    status_badge = f"<span style='color:#2ecc71; font-weight:bold;'>🟢 Online</span>"
+                elif status == "Simulando":
+                    status_badge = f"<span style='color:#3498db; font-weight:bold;'>🔵 Simulando</span>"
+                else:
+                    status_badge = f"<span style='color:#e74c3c; font-weight:bold;' title='{err}'>🔴 Offline</span>"
+                
+                st.markdown(f"{name}: {status_badge}", unsafe_allow_html=True)
+                if err:
+                    st.caption(f"⚠️ `{err[:120]}`")
+
     st.markdown("---")
     
     # System Diagnostic Logs Panel
