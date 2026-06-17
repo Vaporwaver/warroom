@@ -2,9 +2,19 @@ import sqlite3
 import os
 import time
 import json
+import threading
 
 DB_PATH = os.path.join(os.getcwd(), "db.sqlite")
 
+db_lock = threading.Lock()
+
+def with_db_lock(func):
+    def wrapper(*args, **kwargs):
+        with db_lock:
+            return func(*args, **kwargs)
+    return wrapper
+
+@with_db_lock
 def initialize_db():
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -122,6 +132,7 @@ def initialize_db():
         
     conn.close()
 
+@with_db_lock
 def is_processed(identifier):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -130,6 +141,7 @@ def is_processed(identifier):
     conn.close()
     return result is not None
 
+@with_db_lock
 def mark_processed(identifier, source, has_mention=0):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -140,6 +152,7 @@ def mark_processed(identifier, source, has_mention=0):
     conn.commit()
     conn.close()
 
+@with_db_lock
 def get_state(key, default=None):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -150,6 +163,7 @@ def get_state(key, default=None):
         return result[0]
     return default
 
+@with_db_lock
 def set_state(key, value):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -160,6 +174,7 @@ def set_state(key, value):
     conn.commit()
     conn.close()
 
+@with_db_lock
 def clear_cache_and_cooldowns():
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -169,6 +184,7 @@ def clear_cache_and_cooldowns():
     conn.commit()
     conn.close()
 
+@with_db_lock
 def save_alert(alert, client_id, status='pending'):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -200,6 +216,7 @@ def save_alert(alert, client_id, status='pending'):
     conn.commit()
     conn.close()
 
+@with_db_lock
 def update_alert_status(client_id, identifier, status):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -207,6 +224,7 @@ def update_alert_status(client_id, identifier, status):
     conn.commit()
     conn.close()
 
+@with_db_lock
 def get_alerts_by_status(status, client_id):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -242,6 +260,7 @@ def get_alerts_by_status(status, client_id):
         })
     return alerts
 
+@with_db_lock
 def delete_alerts_by_status(status, client_id):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -249,6 +268,7 @@ def delete_alerts_by_status(status, client_id):
     conn.commit()
     conn.close()
 
+@with_db_lock
 def get_sentiment_counts(status='pending', client_id=None):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -265,6 +285,7 @@ def get_sentiment_counts(status='pending', client_id=None):
             counts[r[0]] = r[1]
     return counts
 
+@with_db_lock
 def get_source_counts(status='pending', client_id=None):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -278,6 +299,7 @@ def get_source_counts(status='pending', client_id=None):
 
 # --- Clients CRUD functions ---
 
+@with_db_lock
 def get_all_clients():
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -296,6 +318,7 @@ def get_all_clients():
         })
     return clients
 
+@with_db_lock
 def save_client(client_id, name, email, keywords, description):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
@@ -312,6 +335,7 @@ def save_client(client_id, name, email, keywords, description):
     conn.commit()
     conn.close()
 
+@with_db_lock
 def delete_client(client_id):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()

@@ -1393,8 +1393,19 @@ class MonitoringEngine:
                     union_kws_set.update(kws)
                 if union_kws_set:
                     self.keywords = list(union_kws_set)
+                else:
+                    self.keywords = []
             except Exception as e:
                 self.log_event(f"Error cargando palabras clave de clientes de la BD: {e}")
+
+            # If no keywords are active (and we are not forcing simulation), skip the scan cycle
+            if not self.keywords and not self.force_simulation:
+                self.log_event("No hay palabras clave activas. Omitiendo ciclo de escaneo...")
+                for _ in range(int(self.scan_interval)):
+                    if self.stop_event.is_set():
+                        break
+                    time.sleep(1)
+                continue
 
             # Update scraper configurations dynamically
             for scraper in self.scrapers:
@@ -1405,7 +1416,7 @@ class MonitoringEngine:
                     scraper.sessionid = self.instagram_sessionid
             self.analyzer.model_name = self.ollama_model
             
-            num_workers = min(15, len(self.scrapers))
+            num_workers = min(3, len(self.scrapers))
             if num_workers > 0:
                 self.log_event(f"Iniciando ciclo de monitoreo paralelo para {len(self.scrapers)} canales...")
                 
