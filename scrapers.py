@@ -540,9 +540,8 @@ class YouTubeScraper:
             return mentions
             
         except Exception as e:
-            diagnostic = f"Real-mode failed ({type(e).__name__}: {str(e)})."
             log(f"Error raspando YouTube en vivo ({self.channel_name}): {str(e)}")
-            return self.get_simulated_mention(diagnostic)
+            raise e
 
     def get_simulated_mention(self, diagnostic_msg=None):
         if random.random() > 0.3:
@@ -861,9 +860,8 @@ class InstagramScraper:
                 return mentions
                 
         except Exception as e:
-            diagnostic = f"Real-mode failed ({type(e).__name__}: {str(e)})."
             log(f"Error raspando Instagram en vivo: {str(e)}")
-            return self.get_simulated_mention(diagnostic)
+            raise e
 
     def get_simulated_mention(self, diagnostic_msg=None):
         if random.random() > 0.3:
@@ -936,8 +934,8 @@ class RSSScraper:
                 link = link_elem.text if link_elem is not None else ""
                 desc = desc_elem.text if desc_elem is not None else ""
                 
-                title = html.unescape(re.sub(r'<[^>]*>', '', title)).strip()
-                desc = html.unescape(re.sub(r'<[^>]*>', '', desc)).strip()
+                title = clean_html_text(title)
+                desc = clean_html_text(desc)
                 
                 if not link:
                     continue
@@ -971,9 +969,8 @@ class RSSScraper:
             return mentions
             
         except Exception as e:
-            diagnostic = f"Real-mode failed ({type(e).__name__}: {str(e)})."
             log(f"Error raspando RSS en vivo ({self.feed_name}): {str(e)}")
-            return self.get_simulated_mention(diagnostic)
+            raise e
 
     def get_simulated_mention(self, diagnostic_msg=None):
         if random.random() > 0.3:
@@ -1286,6 +1283,25 @@ def get_scraper_display_name(scraper):
     elif isinstance(scraper, RSSScraper):
         return f"📰 RSS ({scraper.feed_name})"
     return str(scraper)
+
+
+def clean_html_text(raw_html):
+    if not raw_html:
+        return ""
+    import html
+    # Remove CDATA wrapper
+    text = raw_html.replace("<![CDATA[", "").replace("]]>", "")
+    # Remove scripts, styles and comments
+    text = re.sub(r'<script.*?</script>', ' ', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<style.*?</style>', ' ', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<!--.*?-->', ' ', text, flags=re.DOTALL)
+    # Remove HTML tags
+    text = re.sub(r'<[^>]*>', ' ', text)
+    # Unescape HTML entities
+    text = html.unescape(text)
+    # Normalize whitespaces
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 
 # --- Async/Threading Orchestrator Engine ---
