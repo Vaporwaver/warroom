@@ -1535,11 +1535,11 @@ with col_left:
                         
                 report_md += "---\n\n"
                 
-            # 2. Compile CSV
+            # 2. Compile CSV using Semicolon delimiter for Excel compatibility in Spanish locales
             import csv
             from io import StringIO
             f = StringIO()
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter=';', lineterminator='\n')
             writer.writerow(["Fecha/Hora", "Medio/Fuente", "Texto Original", "Resumen de IA", "Sentimiento", "Enlace de Fuente"])
             for a in st.session_state.approved_alerts:
                 formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%Y-%m-%d %I:%M:%S %p")
@@ -1549,7 +1549,9 @@ with col_left:
                 if not link and a.get("video_path"):
                     link = a.get("metadata", {}).get("online_video_url") or f"static/{os.path.basename(a['video_path'])}"
                 writer.writerow([formatted_time, a["source"], a["text"], a["resumen"], a["sentimiento"], link])
-            csv_data = f.getvalue()
+            
+            # Prepend UTF-8 BOM so Excel opens it with correct encoding and handles accents (e.g. empezó, así) properly
+            csv_data = "\ufeff" + f.getvalue()
             
             # Render SMTP send results if available
             if st.session_state.get("smtp_status") == "success":
