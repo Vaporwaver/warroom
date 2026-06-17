@@ -27,25 +27,99 @@ def initialize_db():
     )
     """)
     
-    # Table for persistent alerts
+    # Create clients table
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS alerts (
-        identifier TEXT PRIMARY KEY,
-        source TEXT,
-        text TEXT,
+    CREATE TABLE IF NOT EXISTS clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        email TEXT,
         keywords TEXT,
-        timestamp REAL,
-        sentiment TEXT,
-        summary TEXT,
-        simulated INTEGER,
-        metadata TEXT,
-        audio_path TEXT,
-        video_path TEXT,
-        status TEXT
+        description TEXT
     )
     """)
     
-    conn.commit()
+    # Seed default client if empty
+    cursor.execute("SELECT COUNT(*) FROM clients")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO clients (name, email, keywords, description)
+        """, ("Cliente General", "", "", "Monitoreo general de noticias y relaciones públicas."))
+        conn.commit()
+
+    # Check if alerts table needs migration (check if it exists and has client_id column)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='alerts'")
+    alerts_exists = cursor.fetchone() is not None
+    
+    has_client_id = False
+    if alerts_exists:
+        cursor.execute("PRAGMA table_info(alerts)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if "client_id" in columns:
+            has_client_id = True
+            
+    if alerts_exists and not has_client_id:
+        # Migration is needed!
+        # 1. Rename existing alerts table
+        cursor.execute("ALTER TABLE alerts RENAME TO old_alerts")
+        
+        # 2. Create the new alerts table
+        cursor.execute("""
+        CREATE TABLE alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER,
+            identifier TEXT,
+            source TEXT,
+            text TEXT,
+            keywords TEXT,
+            timestamp REAL,
+            sentiment TEXT,
+            summary TEXT,
+            simulated INTEGER,
+            metadata TEXT,
+            audio_path TEXT,
+            video_path TEXT,
+            status TEXT,
+            UNIQUE(client_id, identifier)
+        )
+        """)
+        
+        # 3. Copy existing alerts assigning client_id = 1 (Cliente General)
+        cursor.execute("""
+        INSERT OR IGNORE INTO alerts (
+            client_id, identifier, source, text, keywords, timestamp, sentiment, summary,
+            simulated, metadata, audio_path, video_path, status
+        )
+        SELECT 1, identifier, source, text, keywords, timestamp, sentiment, summary,
+               simulated, metadata, audio_path, video_path, status
+        FROM old_alerts
+        """)
+        
+        # 4. Drop the old table
+        cursor.execute("DROP TABLE old_alerts")
+        conn.commit()
+    else:
+        # Table doesn't exist, create it from scratch
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER,
+            identifier TEXT,
+            source TEXT,
+            text TEXT,
+            keywords TEXT,
+            timestamp REAL,
+            sentiment TEXT,
+            summary TEXT,
+            simulated INTEGER,
+            metadata TEXT,
+            audio_path TEXT,
+            video_path TEXT,
+            status TEXT,
+            UNIQUE(client_id, identifier)
+        )
+        """)
+        conn.commit()
+        
     conn.close()
 
 def is_processed(identifier):
@@ -95,7 +169,7 @@ def clear_cache_and_cooldowns():
     conn.commit()
     conn.close()
 
-def save_alert(alert, status='pending'):
+def save_alert(alert, client_id, status='pending'):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
     
@@ -105,10 +179,11 @@ def save_alert(alert, status='pending'):
     
     cursor.execute("""
     INSERT OR REPLACE INTO alerts (
-        identifier, source, text, keywords, timestamp, sentiment, summary, 
+        client_id, identifier, source, text, keywords, timestamp, sentiment, summary, 
         simulated, metadata, audio_path, video_path, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
+        client_id,
         alert["identifier"],
         alert["source"],
         alert["text"],
@@ -125,21 +200,21 @@ def save_alert(alert, status='pending'):
     conn.commit()
     conn.close()
 
-def update_alert_status(identifier, status):
+def update_alert_status(client_id, identifier, status):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
-    cursor.execute("UPDATE alerts SET status = ? WHERE identifier = ?", (status, identifier))
+    cursor.execute("UPDATE alerts SET status = ? WHERE client_id = ? AND identifier = ?", (status, client_id, identifier))
     conn.commit()
     conn.close()
 
-def get_alerts_by_status(status):
+def get_alerts_by_status(status, client_id):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
     cursor.execute("""
     SELECT identifier, source, text, keywords, timestamp, sentiment, summary, 
            simulated, metadata, audio_path, video_path, status 
-    FROM alerts WHERE status = ? ORDER BY timestamp DESC
-    """, (status,))
+    FROM alerts WHERE status = ? AND client_id = ? ORDER BY timestamp DESC
+    """, (status, client_id))
     rows = cursor.fetchall()
     conn.close()
     
@@ -167,17 +242,20 @@ def get_alerts_by_status(status):
         })
     return alerts
 
-def delete_alerts_by_status(status):
+def delete_alerts_by_status(status, client_id):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM alerts WHERE status = ?", (status,))
+    cursor.execute("DELETE FROM alerts WHERE status = ? AND client_id = ?", (status, client_id))
     conn.commit()
     conn.close()
 
-def get_sentiment_counts(status='pending'):
+def get_sentiment_counts(status='pending', client_id=None):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
-    cursor.execute("SELECT sentiment, COUNT(*) FROM alerts WHERE status = ? GROUP BY sentiment", (status,))
+    if client_id is not None:
+        cursor.execute("SELECT sentiment, COUNT(*) FROM alerts WHERE status = ? AND client_id = ? GROUP BY sentiment", (status, client_id))
+    else:
+        cursor.execute("SELECT sentiment, COUNT(*) FROM alerts WHERE status = ? GROUP BY sentiment", (status,))
     rows = cursor.fetchall()
     conn.close()
     
@@ -187,10 +265,57 @@ def get_sentiment_counts(status='pending'):
             counts[r[0]] = r[1]
     return counts
 
-def get_source_counts(status='pending'):
+def get_source_counts(status='pending', client_id=None):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
-    cursor.execute("SELECT source, COUNT(*) FROM alerts WHERE status = ? GROUP BY source", (status,))
+    if client_id is not None:
+        cursor.execute("SELECT source, COUNT(*) FROM alerts WHERE status = ? AND client_id = ? GROUP BY source", (status, client_id))
+    else:
+        cursor.execute("SELECT source, COUNT(*) FROM alerts WHERE status = ? GROUP BY source", (status,))
     rows = cursor.fetchall()
     conn.close()
     return dict(rows)
+
+# --- Clients CRUD functions ---
+
+def get_all_clients():
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, email, keywords, description FROM clients ORDER BY id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    clients = []
+    for r in rows:
+        clients.append({
+            "id": r[0],
+            "name": r[1],
+            "email": r[2],
+            "keywords": r[3],
+            "description": r[4]
+        })
+    return clients
+
+def save_client(client_id, name, email, keywords, description):
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    if client_id is None:
+        cursor.execute("""
+        INSERT INTO clients (name, email, keywords, description)
+        VALUES (?, ?, ?, ?)
+        """, (name, email, keywords, description))
+    else:
+        cursor.execute("""
+        UPDATE clients SET name = ?, email = ?, keywords = ?, description = ?
+        WHERE id = ?
+        """, (name, email, keywords, description, client_id))
+    conn.commit()
+    conn.close()
+
+def delete_client(client_id):
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+    cursor.execute("DELETE FROM alerts WHERE client_id = ?", (client_id,))
+    conn.commit()
+    conn.close()

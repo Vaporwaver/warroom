@@ -157,6 +157,27 @@ El panel **Generador de Reportes** permite exportar el trabajo del operador y en
 
 ---
 
+## 👥 Arquitectura Multi-Cliente con IA y Reportes Personalizados
+
+El sistema War Room permite gestionar de manera simultánea e independiente múltiples clientes o marcas. Esto permite segmentar las palabras clave de búsqueda, los destinatarios de los reportes y el enfoque del análisis con Inteligencia Artificial.
+
+### 1. Modelo de Datos SQLite
+- **Tabla `clients`**: Almacena de forma persistente los perfiles de los clientes, compuestos por su nombre, correos de envío de reportes, palabras clave de monitoreo y descripción contextual para la IA.
+- **Tabla `alerts` con `client_id`**: Cada alerta se vincula a un ID de cliente específico. La restricción única `UNIQUE(client_id, identifier)` permite duplicar una mención relevante para diferentes clientes, de forma que cada operador la gestione de manera autónoma en su bandeja de entrada.
+- **Seeding Automático**: Se incluye un cliente semilla por defecto ("Cliente General") para asegurar el funcionamiento out-of-the-box del sistema.
+
+### 2. Unificación y Enrutamiento del Motor
+- **Unión de Palabras Clave**: En cada iteración del motor de monitoreo concurrente, se extrae el conjunto unificado de palabras clave de todos los clientes y se realiza una única búsqueda en red por ciclo para evitar bloqueos por parte de las plataformas (YouTube, Instagram, etc.).
+- **Enrutamiento per-cliente**: Al encontrarse una mención relevante, el motor valida el contenido frente a las palabras clave individuales de cada cliente activo. Si hay coincidencia, guarda un registro personalizado para cada cliente con su respectivo `client_id`.
+
+### 3. Panel de Administración de Clientes y Filtros
+- **Dropdown de Cliente Activo**: Se renderiza al principio del panel central de Streamlit. Al cambiar de cliente, se filtran de forma reactiva las alertas en bandeja, métricas de sentimiento y el generador de reportes.
+- **Pestaña 👥 Clientes**: Panel integrado para visualizar la lista de clientes registrados, crear nuevos perfiles de cliente, editar datos de perfiles existentes o eliminar clientes (protegido contra eliminación si solo queda un cliente activo).
+- **Análisis de IA Personalizado**: La descripción contextual del cliente activo se inyecta en el prompt enviado a Ollama local (`gemma4:e2b`), permitiendo orientar los resúmenes y reportes según el tono y las necesidades analíticas específicas de la marca.
+- **Destinatarios SMTP por Cliente**: El envío de correo diario se direcciona de manera automática a la lista de destinatarios configurada para el cliente activo, cayendo de vuelta en el remitente SMTP general de la barra lateral si el cliente no posee correos asignados.
+
+---
+
 ## ⚙️ Despliegue e Instalación en Clientes
 
 El sistema incluye scripts automatizados diseñados para Windows:

@@ -1353,6 +1353,18 @@ class MonitoringEngine:
         self.log_event("Motor de Monitoreo iniciado con escaneo paralelo.")
         
         while not self.stop_event.is_set():
+            # Update keywords dynamically based on all active clients from the database
+            try:
+                clients = database.get_all_clients()
+                union_kws_set = set()
+                for client in clients:
+                    kws = [k.strip().lower() for k in client["keywords"].split(",") if k.strip()]
+                    union_kws_set.update(kws)
+                if union_kws_set:
+                    self.keywords = list(union_kws_set)
+            except Exception as e:
+                self.log_event(f"Error cargando palabras clave de clientes de la BD: {e}")
+
             # Update scraper configurations dynamically
             for scraper in self.scrapers:
                 scraper.keywords = self.keywords
@@ -1429,24 +1441,51 @@ class MonitoringEngine:
             # Send the matched text for AI analysis
             analysis = self.analyzer.analyze(m["text"])
             
-            # Build full Alert structure
-            alert = {
-                "source": m["source"],
-                "text": m["text"],
-                "keywords": m["keywords"],
-                "timestamp": m["timestamp"],
-                "identifier": m["identifier"],
-                "sentimiento": analysis.get("sentimiento", "Neutral"),
-                "resumen": analysis.get("resumen", "Sin resumen."),
-                "ai_analyzed": analysis.get("ai_analyzed", False),
-                "model_used": analysis.get("model_used", "fallback"),
-                "metadata": m.get("metadata", {}),
-                "simulated": m.get("simulated", False),
-                "diagnostic": m.get("diagnostic") or analysis.get("diagnostic"),
-                "audio_path": m.get("audio_path"),
-                "video_path": m.get("video_path")
-            }
-            # Save to SQLite database
-            database.save_alert(alert, status='pending')
+            # Load clients to determine routing
+            try:
+                clients = database.get_all_clients()
+            except Exception as e:
+                self.log_event(f"Error obteniendo clientes al procesar mención: {e}")
+                clients = []
             
-            self.alerts_queue.put(alert)
+            matched_clients = []
+            for client in clients:
+                client_kws = [k.strip().lower() for k in client["keywords"].split(",") if k.strip()]
+                # Check which of this client's keywords match the text
+                matched_kws = contains_keywords(m["text"], client_kws)
+                if matched_kws:
+                    matched_clients.append((client, matched_kws))
+            
+            # If no client matched (fallback)
+            if not matched_clients and clients:
+                # Fallback to the first client
+                matched_clients.append((clients[0], m["keywords"]))
+                
+            for client, matched_kws in matched_clients:
+                # Build full Alert structure
+                alert = {
+                    "source": m["source"],
+                    "text": m["text"],
+                    "keywords": matched_kws,
+                    "timestamp": m["timestamp"],
+                    "identifier": m["identifier"],
+                    "sentimiento": analysis.get("sentimiento", "Neutral"),
+                    "resumen": analysis.get("resumen", "Sin resumen."),
+                    "ai_analyzed": analysis.get("ai_analyzed", False),
+                    "model_used": analysis.get("model_used", "fallback"),
+                    "metadata": m.get("metadata", {}),
+                    "simulated": m.get("simulated", False),
+                    "diagnostic": m.get("diagnostic") or analysis.get("diagnostic"),
+                    "audio_path": m.get("audio_path"),
+                    "video_path": m.get("video_path")
+                }
+                
+                try:
+                    # Save to SQLite database with client_id
+                    database.save_alert(alert, client_id=client["id"], status='pending')
+                except Exception as e:
+                    self.log_event(f"Error al guardar alerta para cliente {client['name']}: {e}")
+                
+                alert_queued = alert.copy()
+                alert_queued["client_id"] = client["id"]
+                self.alerts_queue.put(alert_queued)

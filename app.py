@@ -60,7 +60,7 @@ def test_smtp_connection(config):
     except Exception as e:
         return False, str(e)
 
-def send_email_report_thread(config, report_md, csv_data, ai_summary):
+def send_email_report_thread(config, report_md, csv_data, ai_summary, override_to_email=None):
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
@@ -72,7 +72,9 @@ def send_email_report_thread(config, report_md, csv_data, ai_summary):
     user = config.get("user")
     password = config.get("password")
     security = config.get("security")
-    to_emails = [e.strip() for e in config.get("to", "").split(",") if e.strip()]
+    
+    to_field = override_to_email if override_to_email else config.get("to", "")
+    to_emails = [e.strip() for e in to_field.split(",") if e.strip()]
     
     try:
         msg = MIMEMultipart()
@@ -361,9 +363,25 @@ st.markdown("""
 
 # Initialize SQLite database and load persistent alerts on every rerun
 database.initialize_db()
-st.session_state.alerts = database.get_alerts_by_status('pending')
-st.session_state.approved_alerts = database.get_alerts_by_status('approved')
-st.session_state.approved_count = len(st.session_state.approved_alerts)
+clients = database.get_all_clients()
+client_ids = [c["id"] for c in clients]
+
+if "active_client_id" not in st.session_state or st.session_state.active_client_id not in client_ids:
+    if clients:
+        st.session_state.active_client_id = clients[0]["id"]
+    else:
+        st.session_state.active_client_id = 1
+    st.session_state.should_reload = True
+    st.session_state.should_reload_approved = True
+
+if "alerts" not in st.session_state or st.session_state.get("should_reload", True):
+    st.session_state.alerts = database.get_alerts_by_status('pending', st.session_state.active_client_id)
+    st.session_state.should_reload = False
+
+if "approved_alerts" not in st.session_state or st.session_state.get("should_reload_approved", True):
+    st.session_state.approved_alerts = database.get_alerts_by_status('approved', st.session_state.active_client_id)
+    st.session_state.approved_count = len(st.session_state.approved_alerts)
+    st.session_state.should_reload_approved = False
 
 import json
 # Load SMTP configuration from SQLite database
@@ -395,7 +413,7 @@ sys_status = st.session_state.system_status
 missing_deps = not (sys_status["ffmpeg"] and sys_status["whisper"] and sys_status["playwright"] and sys_status["ollama"])
 
 if "force_simulation" not in st.session_state:
-    # Default to simulation if dependencies are missing, to guarantee smooth demo out-of-the-box
+    # Default to simulation if dependencies are missing, to guarantee smooth operation out-of-the-box
     st.session_state.force_simulation = missing_deps
 
 # --- SIDEBAR: Configuration & Control ---
@@ -406,7 +424,7 @@ st.sidebar.markdown("<h2 style='margin-top:0;'>Centro de Control</h2>", unsafe_a
 if not st.session_state.monitoring_active:
     if st.sidebar.button("🚀 INICIAR MONITOREO", use_container_width=True, type="primary"):
         # Parse keywords from the visible text input in the configuration section
-        kws_str = st.session_state.get("keywords_input_state", "gobierno, economía, política, presidente")
+        kws_str = st.session_state.get("keywords_input_state", "")
         st.session_state.keywords_str = kws_str
         kws = [k.strip() for k in kws_str.split(",") if k.strip()]
         
@@ -536,13 +554,22 @@ st.sidebar.text_input(
 
 # Text area for keywords and channels shown dynamically if not monitoring
 if not st.session_state.monitoring_active:
+    # Load union of all active clients' keywords
+    clients_db = database.get_all_clients()
+    union_kws = set()
+    for c in clients_db:
+        union_kws.update([k.strip() for k in c["keywords"].split(",") if k.strip()])
+    union_kws_str = ", ".join(sorted(list(union_kws)))
+    
     st.sidebar.text_input(
-        "Palabras Clave",
-        value="gobierno, economía, política, presidente",
-        key="keywords_input_state",
-        help="Menciones con estas palabras clave activarán alertas de IA."
+        "Palabras Clave Activas (Unificadas)",
+        value=union_kws_str,
+        key="keywords_input_state_display",
+        disabled=True,
+        help="Estas son las palabras clave unificadas de todos los clientes configurados. Para modificarlas, vaya a la pestaña 'Clientes'."
     )
-    st.session_state.keywords_str = st.session_state.keywords_input_state
+    st.session_state.keywords_input_state = union_kws_str
+    st.session_state.keywords_str = union_kws_str
     
     DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/q1y9wz4r7uquv
 CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
@@ -654,7 +681,7 @@ https://cdn.com.do/feed/"""
         help="Ingresa una URL de feed RSS por línea."
     )
 else:
-    st.sidebar.info(f"🔍 **Buscando:** `{st.session_state.get('keywords_str', 'gobierno, economía, política, presidente')}`")
+    st.sidebar.info(f"🔍 **Buscando:** `{st.session_state.get('keywords_str', '')}`")
     
     # Format active lists
     engine = st.session_state.get("engine")
@@ -747,36 +774,62 @@ if st.sidebar.button("🧹 Resetear Caché y Enfriamientos", use_container_width
     database.clear_cache_and_cooldowns()
     st.sidebar.success("✅ Caché y enfriamientos restablecidos con éxito.")
 
-st.sidebar.markdown("---")
 st.sidebar.markdown("### ⚙️ Actualizaciones")
 if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True):
-    with st.spinner("Buscando e instalando actualizaciones desde el repositorio..."):
+    with st.spinner("Buscando e instalando actualizaciones..."):
         try:
             import subprocess
-            # Run git pull
-            res = subprocess.run(["git", "pull"], capture_output=True, text=True, timeout=20)
-            if "Already up to date" in res.stdout or "Ya está al día" in res.stdout:
-                st.sidebar.success("✅ El sistema ya está actualizado.")
-            elif res.returncode == 0:
-                st.sidebar.success("🎉 ¡Actualización descargada! Instalando dependencias...")
-                # Re-run requirements installation
-                pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
-                if not os.path.exists(pip_path):
-                    pip_path = "pip" # Fallback
-                subprocess.run([pip_path, "install", "-r", "requirements.txt"])
-                st.sidebar.info("Reiniciando aplicación...")
-                st.rerun()
+            # Check if git is available and inside a work tree
+            res_status = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, timeout=5)
+            if res_status.returncode != 0:
+                st.sidebar.warning("⚠️ Este sistema fue instalado desde un archivo ZIP. Para actualizar, descargue la versión más reciente del paquete.")
             else:
-                # If git is not configured or failed, offer manual help
-                st.sidebar.error(f"Error al conectar con el repositorio. Detalle: {res.stderr[:100]}")
+                # Run git pull
+                res = subprocess.run(["git", "pull"], capture_output=True, text=True, timeout=20)
+                if "Already up to date" in res.stdout or "Ya está al día" in res.stdout:
+                    st.sidebar.success("✅ El sistema ya está actualizado.")
+                elif res.returncode == 0:
+                    st.sidebar.success("🎉 ¡Actualización descargada! Instalando dependencias...")
+                    # Re-run requirements installation
+                    pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
+                    if not os.path.exists(pip_path):
+                        pip_path = "pip" # Fallback
+                    subprocess.run([pip_path, "install", "-r", "requirements.txt"])
+                    st.sidebar.info("Reiniciando aplicación...")
+                    st.rerun()
+                else:
+                    # If git pull failed (e.g. conflicts)
+                    st.sidebar.error(f"Error al conectar con el repositorio. Detalle: {res.stderr[:100]}")
+        except FileNotFoundError:
+            st.sidebar.warning("⚠️ Git no está instalado en este equipo. Para actualizar, descargue la versión más reciente del archivo ZIP.")
         except Exception as e:
-            st.sidebar.error(f"Error de Git: {e}. Asegúrate de tener Git instalado.")
+            st.sidebar.error(f"Error de Git: {e}")
 
 
 
 # --- CENTRAL PANEL: Dashboard Visuals ---
-st.markdown("<h1 class='main-title'>War Room - Demo de Monitoreo con IA</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-title'>War Room - Monitoreo de Medios con IA</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:#a0a0a0; font-size:1.1rem; margin-bottom:25px;'>Monitoreo local en vivo de Radio, YouTube e Instagram con procesamiento lingüístico inteligente local.</p>", unsafe_allow_html=True)
+
+# Selectbox for Active Client
+clients = database.get_all_clients()
+client_names = [c["name"] for c in clients]
+if client_names:
+    active_idx = 0
+    for idx, c in enumerate(clients):
+        if c["id"] == st.session_state.active_client_id:
+            active_idx = idx
+            break
+    
+    selected_client_name = st.selectbox("👥 **Seleccione Cliente Activo:**", options=client_names, index=active_idx, help="Seleccione el cliente para visualizar sus alertas filtradas, métricas y reportes.")
+    selected_client = next(c for c in clients if c["name"] == selected_client_name)
+    if selected_client["id"] != st.session_state.active_client_id:
+        st.session_state.active_client_id = selected_client["id"]
+        st.session_state.should_reload = True
+        st.session_state.should_reload_approved = True
+        st.rerun()
+else:
+    st.warning("⚠️ No hay clientes configurados en el sistema. Vaya a la pestaña de Clientes para agregar uno.")
 
 # Status indicators
 if st.session_state.monitoring_active:
@@ -831,7 +884,7 @@ st.markdown("---")
 col_left, col_right = st.columns([0.65, 0.35])
 
 with col_left:
-    tab_validation, tab_report = st.tabs(["📥 Bandeja de Validación", "📝 Generador de Reportes"])
+    tab_validation, tab_report, tab_clients = st.tabs(["📥 Bandeja de Validación", "📝 Generador de Reportes", "👥 Clientes"])
     
     with tab_validation:
     
@@ -861,19 +914,40 @@ with col_left:
                 st.session_state.system_logs = st.session_state.system_logs[:300]
                 
             if new_alerts_added or new_logs_added:
+                if new_alerts_added:
+                    st.session_state.should_reload = True
                 st.rerun()
     
         # Render filters
         if st.session_state.alerts:
             st.markdown("##### 🔍 Filtrar y Buscar Alertas")
-            col_f1, col_f2, col_f3 = st.columns([0.4, 0.3, 0.3])
+            col_f1, col_f2, col_f3, col_f4 = st.columns([0.35, 0.25, 0.22, 0.18])
             with col_f1:
                 search_query = st.text_input("Buscar por texto", value="", key="search_query_val", placeholder="Escribe palabras clave...")
             with col_f2:
-                unique_sources = sorted(list(set([a["source"] for a in st.session_state.alerts])))
-                selected_sources = st.multiselect("Filtrar por fuente", options=unique_sources, default=unique_sources, key="selected_sources_val")
+                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "📰 RSS"], key="selected_media_val")
             with col_f3:
-                selected_sentiments = st.multiselect("Filtrar por sentimiento", options=["Positivo", "Neutral", "Negativo"], default=["Positivo", "Neutral", "Negativo"], key="selected_sentiments_val")
+                # Find all sources in the alerts cache
+                all_sources = list(set([a["source"] for a in st.session_state.alerts]))
+                # Filter specific sources based on selected media types
+                matching_sources = []
+                for src in all_sources:
+                    src_lower = src.lower()
+                    for m_type in selected_media:
+                        if "Radio" in m_type and "radio" in src_lower:
+                            matching_sources.append(src)
+                        elif "TV" in m_type and "tv" in src_lower:
+                            matching_sources.append(src)
+                        elif "YouTube" in m_type and "youtube" in src_lower:
+                            matching_sources.append(src)
+                        elif "Instagram" in m_type and "instagram" in src_lower:
+                            matching_sources.append(src)
+                        elif "RSS" in m_type and "rss" in src_lower:
+                            matching_sources.append(src)
+                matching_sources = sorted(list(set(matching_sources)))
+                selected_sources = st.multiselect("Fuente/Canal", options=matching_sources, default=matching_sources, key="selected_sources_val")
+            with col_f4:
+                selected_sentiments = st.multiselect("Sentimiento", options=["Positivo", "Neutral", "Negativo"], default=["Positivo", "Neutral", "Negativo"], key="selected_sentiments_val")
                 
             filtered_alerts = []
             for alert in st.session_state.alerts:
@@ -885,10 +959,44 @@ with col_left:
                 source_match = alert["source"] in selected_sources
                 sentiment_match = alert["sentimiento"] in selected_sentiments
                 
-                if text_match and source_match and sentiment_match:
+                # Check medium type match
+                source_lower = alert["source"].lower()
+                media_type_match = False
+                for m_type in selected_media:
+                    if "Radio" in m_type and "radio" in source_lower:
+                        media_type_match = True
+                    elif "TV" in m_type and "tv" in source_lower:
+                        media_type_match = True
+                    elif "YouTube" in m_type and "youtube" in source_lower:
+                        media_type_match = True
+                    elif "Instagram" in m_type and "instagram" in source_lower:
+                        media_type_match = True
+                    elif "RSS" in m_type and "rss" in source_lower:
+                        media_type_match = True
+                        
+                if text_match and source_match and sentiment_match and media_type_match:
                     filtered_alerts.append(alert)
         else:
             filtered_alerts = []
+
+        # Pagination Settings for Inbox
+        PAGE_SIZE = 10
+        total_filtered = len(filtered_alerts)
+        total_pages = max(1, (total_filtered + PAGE_SIZE - 1) // PAGE_SIZE)
+        
+        if "page_num" not in st.session_state:
+            st.session_state.page_num = 1
+            
+        # Bounds check
+        if st.session_state.page_num > total_pages:
+            st.session_state.page_num = total_pages
+        if st.session_state.page_num < 1:
+            st.session_state.page_num = 1
+            
+        start_idx = (st.session_state.page_num - 1) * PAGE_SIZE
+        end_idx = min(start_idx + PAGE_SIZE, total_filtered)
+        
+        page_alerts = filtered_alerts[start_idx:end_idx]
 
         # Render alerts list
         if not st.session_state.alerts:
@@ -904,8 +1012,8 @@ with col_left:
         elif not filtered_alerts:
             st.info("💡 **Sin resultados.** Ninguna mención coincide con los filtros de búsqueda aplicados.")
         else:
-            # Loop through alerts in session state
-            for idx, alert in enumerate(filtered_alerts):
+            # Loop through alerts in page
+            for idx, alert in enumerate(page_alerts):
                 # Select icon
                 source_lower = alert["source"].lower()
                 if "radio" in source_lower: source_icon = "📻"
@@ -1044,8 +1152,25 @@ with col_left:
                         st.write("")
                         st.write("")
                         if st.button("Aprobar", key=f"aprov_{alert['identifier']}", use_container_width=True):
-                            database.update_alert_status(alert['identifier'], 'approved')
+                            database.update_alert_status(st.session_state.active_client_id, alert['identifier'], 'approved')
+                            st.session_state.should_reload = True
+                            st.session_state.should_reload_approved = True
                             st.rerun()
+                            
+            # Page Controls
+            if total_pages > 1:
+                st.markdown("---")
+                col_page_1, col_page_2, col_page_3 = st.columns([0.3, 0.4, 0.3])
+                with col_page_1:
+                    if st.button("⬅️ Anterior", disabled=(st.session_state.page_num == 1), use_container_width=True, key="prev_page_btn"):
+                        st.session_state.page_num -= 1
+                        st.rerun()
+                with col_page_2:
+                    st.markdown(f"<div style='text-align:center; padding-top:5px; color:#a0a0a0;'>Página <strong>{st.session_state.page_num}</strong> de <strong>{total_pages}</strong> ({total_filtered} alertas)</div>", unsafe_allow_html=True)
+                with col_page_3:
+                    if st.button("Siguiente ➡️", disabled=(st.session_state.page_num == total_pages), use_container_width=True, key="next_page_btn"):
+                        st.session_state.page_num += 1
+                        st.rerun()
                         
     with tab_report:
         st.subheader("📝 Reporte Ejecutivo de Monitoreo")
@@ -1072,10 +1197,15 @@ with col_left:
                     for idx, a in enumerate(st.session_state.approved_alerts):
                         text_blocks += f"[{idx+1}] Fuente: {a['source']} | Sentimiento: {a['sentimiento']}\nContenido: {a['text']}\nResumen: {a['resumen']}\n\n"
                         
+                    # Load active client description/context for IA
+                    active_client = next((c for c in clients if c["id"] == st.session_state.active_client_id), None)
+                    client_desc = active_client["description"] if active_client else ""
+                    
                     prompt = (
                         "Eres un analista experto de PR y monitoreo de medios. "
                         "A continuación tienes una lista de menciones de prensa aprobadas hoy. "
-                        "Redacta un reporte ejecutivo consolidado de un máximo de dos párrafos en español, resumiendo los temas clave tratados, la distribución del sentimiento y cualquier alerta de crisis o tendencia relevante. Usa un tono formal y corporativo.\n\n"
+                        f"Contexto del cliente: {client_desc}\n\n"
+                        "Redacta un reporte ejecutivo consolidado de un máximo de dos párrafos en español, resumiendo los temas clave tratados, la distribución del sentimiento y cualquier alerta de crisis o tendencia relevante, enfocándote en los aspectos de mayor interés para el cliente según su contexto. Usa un tono formal y corporativo.\n\n"
                         f"Menciones:\n{text_blocks}"
                     )
                     
@@ -1247,15 +1377,19 @@ with col_left:
                      use_container_width=True
                 )
             with col_dl3:
-                smtp_configured = bool(smtp_config.get("server") and smtp_config.get("user") and smtp_config.get("password") and smtp_config.get("to"))
+                active_client = next((c for c in clients if c["id"] == st.session_state.active_client_id), None)
+                client_emails = active_client["email"] if active_client else ""
+                recipient_emails = client_emails if client_emails else smtp_config.get("to", "")
+                
+                smtp_configured = bool(smtp_config.get("server") and smtp_config.get("user") and smtp_config.get("password") and recipient_emails)
                 btn_label = "⌛ Enviando..." if st.session_state.smtp_sending else "📧 Enviar por Correo"
-                if st.button(btn_label, use_container_width=True, disabled=not smtp_configured or st.session_state.smtp_sending, help="Envía este reporte diario a través de correo electrónico (SMTP) a la lista de destinatarios configurada."):
+                if st.button(btn_label, use_container_width=True, disabled=not smtp_configured or st.session_state.smtp_sending, help="Envía este reporte diario a través de correo electrónico (SMTP) a la lista de destinatarios del cliente seleccionado."):
                     st.session_state.smtp_sending = True
                     st.session_state.smtp_status = "sending"
                     import threading
                     t = threading.Thread(
                         target=send_email_report_thread, 
-                        args=(smtp_config, report_md, csv_data, st.session_state.get("ai_summary_report"))
+                        args=(smtp_config, report_md, csv_data, st.session_state.get("ai_summary_report"), recipient_emails)
                     )
                     t.start()
                     st.rerun()
@@ -1275,10 +1409,97 @@ with col_left:
                     if vp and os.path.exists(vp):
                         try: os.remove(vp)
                         except Exception: pass
-                database.delete_alerts_by_status('approved')
+                database.delete_alerts_by_status('approved', st.session_state.active_client_id)
                 st.session_state.approved_alerts = []
                 st.session_state.ai_summary_report = None
                 st.rerun()
+
+    with tab_clients:
+        st.subheader("👥 Administración de Clientes")
+        st.markdown("Configura los perfiles de tus clientes, incluyendo destinatarios de correo, palabras clave y contexto para el análisis automatizado con Inteligencia Artificial.")
+        
+        # Load clients
+        clients = database.get_all_clients()
+        
+        # 2-column layout inside the tab
+        col_list, col_form = st.columns([0.45, 0.55])
+        
+        with col_list:
+            st.markdown("##### Clientes Registrados")
+            if not clients:
+                st.info("No hay clientes registrados.")
+            else:
+                for c in clients:
+                    with st.expander(f"👤 {c['name']}"):
+                        st.markdown(f"**Emails:** `{c['email'] or 'No configurados'}`")
+                        st.markdown(f"**Keywords:** `{c['keywords']}`")
+                        st.markdown(f"**Descripción/Contexto IA:**\n{c['description']}")
+        
+        with col_form:
+            st.markdown("##### Agregar / Editar Cliente")
+            
+            # Option to add new or select existing to edit
+            form_options = ["🆕 Agregar Nuevo Cliente"] + [f"✏️ Editar: {c['name']}" for c in clients]
+            selected_option = st.selectbox("Seleccione una acción:", options=form_options)
+            
+            # Setup form fields based on selection
+            if selected_option == "🆕 Agregar Nuevo Cliente":
+                edit_mode = False
+                target_client = None
+                default_name = ""
+                default_email = ""
+                default_keywords = ""
+                default_desc = ""
+            else:
+                edit_mode = True
+                client_name_to_edit = selected_option.replace("✏️ Editar: ", "")
+                target_client = next(c for c in clients if c["name"] == client_name_to_edit)
+                default_name = target_client["name"]
+                default_email = target_client["email"]
+                default_keywords = target_client["keywords"]
+                default_desc = target_client["description"]
+            
+            # Form fields
+            form_name = st.text_input("Nombre del Cliente", value=default_name, placeholder="Ej. Presidencia de la República")
+            form_email = st.text_input("Correo(s) para Reportes (separados por comas)", value=default_email, placeholder="ejemplo1@correo.com, ejemplo2@correo.com")
+            form_keywords = st.text_input("Palabras Clave (separadas por comas)", value=default_keywords, placeholder="gobierno, presidente, reforma")
+            form_desc = st.text_area("Descripción/Contexto para la IA", value=default_desc, placeholder="Contexto de negocio o marca, temas críticos a monitorear y tono sugerido para el análisis...")
+            
+            # Buttons
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                submit_label = "Guardar Cambios" if edit_mode else "Crear Cliente"
+                if st.button(submit_label, type="primary", use_container_width=True):
+                    if not form_name.strip():
+                        st.error("El nombre del cliente no puede estar vacío.")
+                    elif not form_keywords.strip():
+                        st.error("Debe ingresar al menos una palabra clave de monitoreo.")
+                    else:
+                        client_id = target_client["id"] if edit_mode else None
+                        try:
+                            database.save_client(client_id, form_name.strip(), form_email.strip(), form_keywords.strip(), form_desc.strip())
+                            st.success("✅ Cliente guardado con éxito.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error al guardar cliente: {e}")
+            with col_b2:
+                if edit_mode:
+                    # Allow deletion unless it is the last client
+                    if len(clients) <= 1:
+                        st.button("Eliminar Cliente", type="secondary", use_container_width=True, disabled=True, help="No se puede eliminar el único cliente activo.")
+                    else:
+                        confirm_delete = st.checkbox("Confirmar eliminación", key=f"confirm_del_{target_client['id']}")
+                        if st.button("Eliminar Cliente", type="secondary", use_container_width=True, disabled=not confirm_delete):
+                            try:
+                                database.delete_client(target_client["id"])
+                                st.success("✅ Cliente eliminado.")
+                                # If we deleted the active client, reset active client ID
+                                if st.session_state.active_client_id == target_client["id"]:
+                                    remaining_clients = [c for c in clients if c["id"] != target_client["id"]]
+                                    st.session_state.active_client_id = remaining_clients[0]["id"]
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error al eliminar cliente: {e}")
 
 with col_right:
     st.subheader("📊 Métricas de Medios")
