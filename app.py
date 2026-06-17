@@ -781,9 +781,12 @@ if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True):
             import subprocess
             # Check if git is available and inside a work tree
             res_status = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True, timeout=5)
-            if res_status.returncode != 0:
-                st.sidebar.warning("⚠️ Este sistema fue instalado desde un archivo ZIP. Para actualizar, descargue la versión más reciente del paquete.")
-            else:
+            is_git = (res_status.returncode == 0)
+        except (FileNotFoundError, Exception):
+            is_git = False
+
+        if is_git:
+            try:
                 # Run git pull
                 res = subprocess.run(["git", "pull"], capture_output=True, text=True, timeout=20)
                 if "Already up to date" in res.stdout or "Ya está al día" in res.stdout:
@@ -800,10 +803,77 @@ if st.sidebar.button("🔄 Buscar Actualizaciones", use_container_width=True):
                 else:
                     # If git pull failed (e.g. conflicts)
                     st.sidebar.error(f"Error al conectar con el repositorio. Detalle: {res.stderr[:100]}")
-        except FileNotFoundError:
-            st.sidebar.warning("⚠️ Git no está instalado en este equipo. Para actualizar, descargue la versión más reciente del archivo ZIP.")
-        except Exception as e:
-            st.sidebar.error(f"Error de Git: {e}")
+            except Exception as e:
+                st.sidebar.error(f"Error al actualizar via Git: {e}")
+        else:
+            # ZIP-based update fallback
+            st.sidebar.info("📦 Instalación ZIP detectada. Descargando última versión de GitHub...")
+            try:
+                import urllib.request
+                import zipfile
+                import io
+                import shutil
+                
+                url = "https://github.com/Vaporwaver/warroom/archive/refs/heads/main.zip"
+                
+                req = urllib.request.Request(
+                    url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                )
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    zip_data = response.read()
+                
+                st.sidebar.info("📂 Extrayendo y aplicando actualización...")
+                temp_dir = os.path.join(os.getcwd(), "temp_update")
+                if os.path.exists(temp_dir):
+                    try:
+                        shutil.rmtree(temp_dir)
+                    except Exception:
+                        pass
+                os.makedirs(temp_dir)
+                
+                with zipfile.ZipFile(io.BytesIO(zip_data)) as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                
+                dirs = [d for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
+                if not dirs:
+                    raise Exception("El archivo de actualización descargado está vacío.")
+                extracted_root = os.path.join(temp_dir, dirs[0])
+                
+                # Copy files overwriting local ones (excluding db.sqlite, venv, static, etc.)
+                for root_dir, subdirs, files in os.walk(extracted_root):
+                    rel_path = os.path.relpath(root_dir, extracted_root)
+                    dest_dir = os.path.normpath(os.path.join(os.getcwd(), rel_path)) if rel_path != "." else os.getcwd()
+                    
+                    if not os.path.exists(dest_dir):
+                        os.makedirs(dest_dir)
+                        
+                    for file in files:
+                        src_file = os.path.join(root_dir, file)
+                        dest_file = os.path.join(dest_dir, file)
+                        
+                        if file.lower() == "db.sqlite":
+                            continue
+                            
+                        shutil.copy2(src_file, dest_file)
+                
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+                
+                st.sidebar.success("🎉 ¡Actualización aplicada con éxito! Instalando dependencias...")
+                
+                # Re-run requirements installation
+                pip_path = os.path.join(os.getcwd(), "venv", "Scripts", "pip.exe")
+                if not os.path.exists(pip_path):
+                    pip_path = "pip" # Fallback
+                subprocess.run([pip_path, "install", "-r", "requirements.txt"])
+                
+                st.sidebar.info("Reiniciando aplicación...")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Error al actualizar desde el ZIP: {e}")
 
 
 
@@ -1111,7 +1181,7 @@ with col_left:
                         audio_path = alert.get("audio_path")
                         if audio_path and os.path.exists(audio_path):
                             file_name = os.path.basename(audio_path)
-                            st.link_button("↗️ Abrir Audio en otra pestaña", f"/app/static/{file_name}")
+                            st.link_button("↗️ Abrir Audio en otra pestaña", f"static/{file_name}")
                             
                             audio_key = f"play_audio_{alert['identifier']}"
                             if audio_key not in st.session_state:
@@ -1134,7 +1204,7 @@ with col_left:
                         video_path = alert.get("video_path")
                         if video_path and os.path.exists(video_path):
                             file_name = os.path.basename(video_path)
-                            st.link_button("↗️ Abrir Video en otra pestaña", f"/app/static/{file_name}")
+                            st.link_button("↗️ Abrir Video en otra pestaña", f"static/{file_name}")
                             
                             video_key = f"play_video_{alert['identifier']}"
                             if video_key not in st.session_state:
