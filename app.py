@@ -227,20 +227,19 @@ st.markdown("""
 <style>
     /* Styling for Alert Cards */
     .pr-card {
-        background-color: rgba(255, 255, 255, 0.04);
-        border-radius: 10px;
+        background-color: #121826;
+        border-radius: 12px;
         padding: 20px;
         margin-bottom: 20px;
         border-left: 6px solid #95a5a6;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
-        border-right: 1px solid rgba(255, 255, 255, 0.05);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.04);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .pr-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.08);
     }
     .pr-card-positivo {
         border-left-color: #2ecc71; /* Harmonious Green */
@@ -350,13 +349,16 @@ st.markdown("""
     }
     
     .pr-quote {
-        background-color: rgba(255, 255, 255, 0.06);
+        background-color: #1b2336;
         border-left: 4px solid #7f8c8d;
         padding: 12px 18px;
         border-radius: 4px;
         margin: 10px 0px 15px 0px;
         font-size: 0.95rem;
         line-height: 1.5;
+        border-right: 1px solid rgba(255, 255, 255, 0.02);
+        border-top: 1px solid rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.02);
     }
 </style>
 """, unsafe_allow_html=True)
