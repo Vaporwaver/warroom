@@ -1107,14 +1107,17 @@ with col_left:
                             if post_url:
                                 st.link_button("📰 Leer Artículo en Somos Pueblo", post_url)
                                 
-                        # Render st.audio player if audio path exists for this mention and toggle is active
+                        # Render st.audio player if audio path exists for this mention
                         audio_path = alert.get("audio_path")
                         if audio_path and os.path.exists(audio_path):
+                            file_name = os.path.basename(audio_path)
+                            st.link_button("↗️ Abrir Audio en otra pestaña", f"/app/static/{file_name}")
+                            
                             audio_key = f"play_audio_{alert['identifier']}"
                             if audio_key not in st.session_state:
                                 st.session_state[audio_key] = False
                             
-                            btn_label = "🔇 Ocultar Reproductor" if st.session_state[audio_key] else "🎧 Escuchar Audio"
+                            btn_label = "🔇 Ocultar Reproductor local" if st.session_state[audio_key] else "🎧 Escuchar Audio localmente"
                             if st.button(btn_label, key=f"btn_{audio_key}"):
                                 st.session_state[audio_key] = not st.session_state[audio_key]
                                 st.rerun()
@@ -1127,14 +1130,17 @@ with col_left:
                                 except Exception as e:
                                     st.error(f"Error al reproducir audio: {e}")
                                     
-                        # Render st.video player if video path exists for this mention and toggle is active
+                        # Render st.video player if video path exists for this mention
                         video_path = alert.get("video_path")
                         if video_path and os.path.exists(video_path):
+                            file_name = os.path.basename(video_path)
+                            st.link_button("↗️ Abrir Video en otra pestaña", f"/app/static/{file_name}")
+                            
                             video_key = f"play_video_{alert['identifier']}"
                             if video_key not in st.session_state:
                                 st.session_state[video_key] = False
                             
-                            btn_label = "🔇 Ocultar Reproductor de Video" if st.session_state[video_key] else "📺 Ver Clip de Video"
+                            btn_label = "🔇 Ocultar Reproductor local" if st.session_state[video_key] else "📺 Ver Clip de Video localmente"
                             if st.button(btn_label, key=f"btn_{video_key}"):
                                 st.session_state[video_key] = not st.session_state[video_key]
                                 st.rerun()
@@ -1345,9 +1351,9 @@ with col_left:
                 formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%Y-%m-%d %I:%M:%S %p")
                 link = a.get("metadata", {}).get("video_url") or a.get("metadata", {}).get("post_url") or ""
                 if not link and a.get("audio_path"):
-                    link = a.get("metadata", {}).get("online_audio_url") or f"media/{os.path.basename(a['audio_path'])}"
+                    link = a.get("metadata", {}).get("online_audio_url") or f"static/{os.path.basename(a['audio_path'])}"
                 if not link and a.get("video_path"):
-                    link = a.get("metadata", {}).get("online_video_url") or f"media/{os.path.basename(a['video_path'])}"
+                    link = a.get("metadata", {}).get("online_video_url") or f"static/{os.path.basename(a['video_path'])}"
                 writer.writerow([formatted_time, a["source"], a["text"], a["resumen"], a["sentimiento"], link])
             csv_data = f.getvalue()
             

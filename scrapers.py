@@ -221,8 +221,8 @@ class RadioScraper:
             # 4. Keyword Match
             found_kws = contains_keywords(text, self.keywords)
             if found_kws:
-                # Save audio to media directory
-                media_dir = os.path.join(os.getcwd(), "media")
+                # Save audio to static directory
+                media_dir = os.path.join(os.getcwd(), "static")
                 os.makedirs(media_dir, exist_ok=True)
                 audio_filename = f"radio_{int(time.time())}.wav"
                 persistent_path = os.path.join(media_dir, audio_filename)
@@ -1084,8 +1084,8 @@ class TVScraper:
             # 4. Keyword Match
             found_kws = contains_keywords(text, self.keywords)
             if found_kws:
-                # Save video to media directory
-                media_dir = os.path.join(os.getcwd(), "media")
+                # Save video to static directory
+                media_dir = os.path.join(os.getcwd(), "static")
                 os.makedirs(media_dir, exist_ok=True)
                 video_filename = f"tv_{ts}.mp4"
                 persistent_path = os.path.join(media_dir, video_filename)
