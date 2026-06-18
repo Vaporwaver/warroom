@@ -563,6 +563,8 @@ if not st.session_state.monitoring_active:
     clients_db = database.get_all_clients()
     union_kws = set()
     for c in clients_db:
+        if c.get("enabled", 1) == 0:
+            continue
         union_kws.update([k.strip() for k in c["keywords"].split(",") if k.strip()])
     union_kws_str = ", ".join(sorted(list(union_kws)))
     

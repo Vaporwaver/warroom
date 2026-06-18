@@ -1520,7 +1520,10 @@ class MonitoringEngine:
                 # Fallback to the first enabled client
                 first_enabled = next((c for c in clients if c.get("enabled", 1) == 1), None)
                 if first_enabled:
-                    matched_clients.append((first_enabled, m["keywords"]))
+                    # Filter to only contain keywords of this enabled client
+                    client_kws = [k.strip().lower() for k in first_enabled["keywords"].split(",") if k.strip()]
+                    matched_kws = contains_keywords(m["text"], client_kws)
+                    matched_clients.append((first_enabled, matched_kws))
                 
             for client, matched_kws in matched_clients:
                 # Build full Alert structure
