@@ -145,12 +145,21 @@ def check_system_status():
 # Lazy loading singleton for Whisper to save memory
 _whisper_model_instance = None
 _whisper_model_lock = threading.Lock()
+# Global lock to serialize Whisper transcription and prevent CPU saturation/WebSocket drops
+_whisper_transcription_lock = threading.Lock()
 
 def get_whisper_model(model_name="tiny"):
     global _whisper_model_instance
     with _whisper_model_lock:
         if _whisper_model_instance is None:
             import whisper
+            import torch
+            # Limit PyTorch to a single thread on CPU to save system resources
+            try:
+                torch.set_num_threads(1)
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
             # Force tiny/base model to avoid RAM and CPU saturation
             _whisper_model_instance = whisper.load_model(model_name)
         return _whisper_model_instance
@@ -215,7 +224,8 @@ class RadioScraper:
                 
             # 3. Transcribe with Whisper
             model = get_whisper_model(self.whisper_model_name)
-            transcription = model.transcribe(temp_audio, language="es")
+            with _whisper_transcription_lock:
+                transcription = model.transcribe(temp_audio, language="es")
             text = transcription.get("text", "")
             
             # 4. Keyword Match
@@ -479,7 +489,8 @@ class YouTubeScraper:
                         log(f"Transcribiendo audio localmente con Whisper para {video_id}...")
                         model_name = engine.whisper_model if (engine and hasattr(engine, 'whisper_model')) else "tiny"
                         model = get_whisper_model(model_name)
-                        transcription = model.transcribe(wav_audio_path, language="es")
+                        with _whisper_transcription_lock:
+                            transcription = model.transcribe(wav_audio_path, language="es")
                         full_text = transcription.get("text", "")
                         
                         # 4. Search keywords and build context using Whisper segment timestamps
@@ -1074,7 +1085,8 @@ class TVScraper:
                 
             # 3. Transcribe with Whisper
             model = get_whisper_model(self.whisper_model_name)
-            transcription = model.transcribe(temp_audio, language="es")
+            with _whisper_transcription_lock:
+                transcription = model.transcribe(temp_audio, language="es")
             text = transcription.get("text", "")
             
             if os.path.exists(temp_audio):

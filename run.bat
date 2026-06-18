@@ -27,10 +27,15 @@ echo.
 echo [*] Cargando entorno virtual e iniciando Streamlit...
 if exist "venv\Scripts\activate.bat" (
     call venv\Scripts\activate.bat
+    
+    :loop
+    echo [*] Iniciando Streamlit (Cierre la ventana o presione Ctrl+C para terminar)...
     streamlit run app.py
     echo.
     echo [!] El servidor de Streamlit se ha cerrado o ha fallado.
-    pause
+    echo [*] Reiniciando en 5 segundos...
+    timeout /t 5 >nul
+    goto loop
 ) else (
     echo [!] No se detecto el entorno virtual 'venv'.
     echo Por favor, ejecuta primero el script de instalacion 'setup.bat'.
