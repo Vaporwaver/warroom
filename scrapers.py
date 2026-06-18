@@ -1389,6 +1389,9 @@ class MonitoringEngine:
                 clients = database.get_all_clients()
                 union_kws_set = set()
                 for client in clients:
+                    # Skip disabled clients
+                    if client.get("enabled", 1) == 0:
+                        continue
                     kws = [k.strip().lower() for k in client["keywords"].split(",") if k.strip()]
                     union_kws_set.update(kws)
                 if union_kws_set:
@@ -1491,6 +1494,9 @@ class MonitoringEngine:
             
             matched_clients = []
             for client in clients:
+                # Skip disabled clients
+                if client.get("enabled", 1) == 0:
+                    continue
                 client_kws = [k.strip().lower() for k in client["keywords"].split(",") if k.strip()]
                 # Check which of this client's keywords match the text
                 matched_kws = contains_keywords(m["text"], client_kws)
@@ -1499,8 +1505,10 @@ class MonitoringEngine:
             
             # If no client matched (fallback)
             if not matched_clients and clients:
-                # Fallback to the first client
-                matched_clients.append((clients[0], m["keywords"]))
+                # Fallback to the first enabled client
+                first_enabled = next((c for c in clients if c.get("enabled", 1) == 1), None)
+                if first_enabled:
+                    matched_clients.append((first_enabled, m["keywords"]))
                 
             for client, matched_kws in matched_clients:
                 # Build full Alert structure

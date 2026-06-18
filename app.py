@@ -1634,10 +1634,18 @@ with col_left:
                 st.info("No hay clientes registrados.")
             else:
                 for c in clients:
-                    with st.expander(f"👤 {c['name']}"):
+                    is_enabled = c.get("enabled", 1) == 1
+                    status_lbl = "🟢 Activo" if is_enabled else "🔴 Inactivo"
+                    with st.expander(f"👤 {c['name']} ({status_lbl})"):
                         st.markdown(f"**Emails:** `{c['email'] or 'No configurados'}`")
                         st.markdown(f"**Keywords:** `{c['keywords']}`")
                         st.markdown(f"**Descripción/Contexto IA:**\n{c['description']}")
+                        st.markdown("---")
+                        toggle_key = f"toggle_client_enabled_{c['id']}"
+                        enabled_toggle = st.toggle("Monitoreo Activo", value=is_enabled, key=toggle_key)
+                        if enabled_toggle != is_enabled:
+                            database.update_client_enabled(c['id'], 1 if enabled_toggle else 0)
+                            st.rerun()
         
         with col_form:
             st.markdown("##### Agregar / Editar Cliente")

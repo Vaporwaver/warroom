@@ -44,15 +44,24 @@ def initialize_db():
         name TEXT UNIQUE NOT NULL,
         email TEXT,
         keywords TEXT,
-        description TEXT
+        description TEXT,
+        enabled INTEGER DEFAULT 1
     )
     """)
+    
+    # Migration for clients: check if enabled column exists
+    cursor.execute("PRAGMA table_info(clients)")
+    columns = [info[1] for info in cursor.fetchall()]
+    if "enabled" not in columns:
+        cursor.execute("ALTER TABLE clients ADD COLUMN enabled INTEGER DEFAULT 1")
+        conn.commit()
     
     # Seed default client if empty
     cursor.execute("SELECT COUNT(*) FROM clients")
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
-        INSERT INTO clients (name, email, keywords, description)
+        INSERT INTO clients (name, email, keywords, description, enabled)
+        VALUES (?, ?, ?, ?, 1)
         """, ("Cliente General", "", "", "Monitoreo general de noticias y relaciones públicas."))
         conn.commit()
 
@@ -303,7 +312,7 @@ def get_source_counts(status='pending', client_id=None):
 def get_all_clients():
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, keywords, description FROM clients ORDER BY id ASC")
+    cursor.execute("SELECT id, name, email, keywords, description, enabled FROM clients ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
     
@@ -314,9 +323,18 @@ def get_all_clients():
             "name": r[1],
             "email": r[2],
             "keywords": r[3],
-            "description": r[4]
+            "description": r[4],
+            "enabled": r[5]
         })
     return clients
+
+@with_db_lock
+def update_client_enabled(client_id, enabled):
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE clients SET enabled = ? WHERE id = ?", (enabled, client_id))
+    conn.commit()
+    conn.close()
 
 @with_db_lock
 def save_client(client_id, name, email, keywords, description):
