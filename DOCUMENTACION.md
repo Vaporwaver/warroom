@@ -122,8 +122,10 @@ El sistema está diseñado de forma modular y minimalista para evitar dependenci
 El sistema opera bajo una política estricta de privacidad. Ningún dato de monitoreo sale del servidor del cliente hacia APIs externas:
 
 1. **OpenAI Whisper (Model: `tiny` / `base`)**:
-   - Carga localmente mediante la librería `whisper`.
-   - Se encarga de procesar los flujos de voz (Radio, TV y fallbacks de YouTube) y convertirlos a texto plano.
+   - **Carga Local**: Se ejecuta 100% offline mediante la librería `whisper`.
+   - **Procesamiento de Voz**: Transcribe los flujos grabados de Radio, TV y audios descargados en fallbacks de YouTube.
+   - **Limitación de Hilos de CPU**: Para evitar congelamientos del servidor Streamlit y del WebSocket (`WinError 10054`), se restringe el paralelismo de CPU de PyTorch a un solo hilo (`torch.set_num_threads(1)`).
+   - **Sincronización por Bloqueo Global (`_whisper_transcription_lock`)**: Se utiliza un bloqueo exclusivo para serializar la transcripción. Múltiples fuentes graban simultáneamente, pero transcriben secuencialmente (una por una) para evitar picos de consumo de CPU al 100%.
 2. **Ollama (`gemma4:e2b`)**:
    - Ejecuta un servidor local en el puerto `11434`.
    - **Clasificación de Sentimientos**: Identifica si una mención es `🟢 Positivo`, `🔵 Neutral` o `🔴 Negativo`.
@@ -167,8 +169,9 @@ El sistema War Room permite gestionar de manera simultánea e independiente múl
 - **Seeding Automático**: Se incluye un cliente semilla por defecto ("Cliente General") para asegurar el funcionamiento out-of-the-box del sistema.
 
 ### 2. Unificación y Enrutamiento del Motor
-- **Unión de Palabras Clave**: En cada iteración del motor de monitoreo concurrente, se extrae el conjunto unificado de palabras clave de todos los clientes y se realiza una única búsqueda en red por ciclo para evitar bloqueos por parte de las plataformas (YouTube, Instagram, etc.).
-- **Enrutamiento per-cliente**: Al encontrarse una mención relevante, el motor valida el contenido frente a las palabras clave individuales de cada cliente activo. Si hay coincidencia, guarda un registro personalizado para cada cliente con su respectivo `client_id`.
+- **Unión de Palabras Clave Activas**: En cada ciclo de escaneo, se compila un conjunto unificado con las palabras clave únicamente de los clientes habilitados (`enabled == 1`). Los clientes desactivados se omiten por completo de la búsqueda para optimizar recursos.
+- **Enrutamiento y Filtrado per-cliente**: Al detectarse una mención, se evalúa contra las palabras clave específicas de cada cliente activo. Si coincide, se crea una alerta vinculada a su `client_id`.
+- **Protección de Fallback**: Si una mención no coincide de manera exacta y se asigna al primer cliente activo como respaldo, la alerta se filtra para que contenga únicamente las palabras clave que correspondan al cliente receptor, bloqueando la filtración de palabras clave pertenecientes a clientes inactivos.
 
 ### 3. Panel de Administración de Clientes y Filtros
 - **Dropdown de Cliente Activo**: Se renderiza al principio del panel central de Streamlit. Al cambiar de cliente, se filtran de forma reactiva las alertas en bandeja, métricas de sentimiento y el generador de reportes.
@@ -197,8 +200,9 @@ El operador debe ejecutar el archivo `setup.bat` (preferiblemente como Administr
 ### 2. Ejecución Diaria (`run.bat`)
 Para arrancar el sistema, el operador simplemente debe hacer doble clic en `run.bat`. Este script se encarga de:
 1. Comprobar e iniciar el servicio local de Ollama en segundo plano (si no estuviese corriendo).
-2. Activar el entorno virtual local (`venv`).
-3. Arrancar el servidor web de Streamlit e iniciar el navegador en `http://localhost:8501`.
+2. Verificar la integridad del entorno virtual (`venv/Scripts/activate.bat`) de forma lineal externa (evitando bloques de paréntesis conflictivos para CMD en Windows).
+3. Activar el entorno virtual local (`venv`).
+4. **Bucle de Auto-Recuperación (Auto-Restart)**: Arranca el servidor web de Streamlit e inicia el navegador en `http://localhost:8501`. En caso de que el proceso del servidor falle o se cierre de forma inesperada, el script espera 5 segundos y vuelve a lanzar Streamlit automáticamente en un bucle infinito, asegurando una alta disponibilidad.
 
 ---
 
