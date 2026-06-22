@@ -751,7 +751,7 @@ class InstagramScraper:
                 unique_edges = []
                 for edge in profile_json.get("edges", []):
                     node = edge.get("node", {})
-                    shortcode = node.get("shortcode")
+                    shortcode = node.get("shortcode") or node.get("code")
                     if shortcode and shortcode not in seen_shortcodes:
                         seen_shortcodes.add(shortcode)
                         unique_edges.append(edge)
@@ -763,7 +763,7 @@ class InstagramScraper:
                     log(f"API de Instagram interceptada. Procesando {len(media_edges)} posts...")
                     for edge in media_edges:
                         node = edge.get("node", {})
-                        shortcode = node.get("shortcode")
+                        shortcode = node.get("shortcode") or node.get("code")
                         if not shortcode:
                             continue
                             
@@ -773,12 +773,16 @@ class InstagramScraper:
                         if database.is_processed(identifier):
                             continue
                             
-                        taken_at = node.get("taken_at_timestamp", 0)
+                        taken_at = node.get("taken_at_timestamp") or node.get("taken_at", 0)
                         scanned_count += 1
-                        caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
                         caption_text = ""
+                        
+                        caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
                         if caption_edges:
                             caption_text = caption_edges[0].get("node", {}).get("text", "")
+                        
+                        if not caption_text and isinstance(node.get("caption"), dict):
+                            caption_text = node.get("caption", {}).get("text", "")
                             
                         if not caption_text:
                             # Still mark empty captions as processed to avoid re-checking
