@@ -874,6 +874,8 @@ with col_diag2:
     st.markdown(f"**Playwright:** {status_badge(sys_status['playwright'])}")
     st.markdown(f"**Ollama:** {status_badge(sys_status['ollama'])}")
 
+st.sidebar.markdown(f"**FFmpeg Path:** `{scrapers.get_ffmpeg_path()}`")
+
 if sys_status["ollama"]:
     st.sidebar.caption(f"Modelos detectados: `{', '.join(sys_status['ollama_models']) or 'Ninguno'}`")
 else:
