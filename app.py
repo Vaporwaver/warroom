@@ -876,6 +876,20 @@ with col_diag2:
 
 st.sidebar.markdown(f"**FFmpeg Path:** `{scrapers.get_ffmpeg_path()}`")
 
+# Auto-download option if ffmpeg.exe is missing on the client PC
+local_ffmpeg_exists = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe"))
+if not local_ffmpeg_exists:
+    st.sidebar.warning("⚠️ No se detectó 'ffmpeg.exe' local en la raíz del proyecto. El motor podría fallar al grabar streams.")
+    if st.sidebar.button("📥 Descargar FFmpeg Completo", use_container_width=True, help="Descarga e instala automáticamente la versión completa de FFmpeg (gyan.dev) requerida para la grabación de transmisiones."):
+        with st.spinner("Descargando y extrayendo FFmpeg... (Puede tomar 1 o 2 minutos)"):
+            success = scrapers.download_local_ffmpeg()
+            if success:
+                st.sidebar.success("✅ ¡FFmpeg instalado con éxito!")
+                st.session_state.system_status = scrapers.check_system_status()
+                st.rerun()
+            else:
+                st.sidebar.error("❌ Falló la descarga. Intente de nuevo o ejecute 'setup.bat'.")
+
 if sys_status["ollama"]:
     st.sidebar.caption(f"Modelos detectados: `{', '.join(sys_status['ollama_models']) or 'Ninguno'}`")
 else:

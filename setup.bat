@@ -56,6 +56,22 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 echo [OK] Dependencias instaladas.
 
+:: 3b. Check and Download local FFmpeg if missing
+echo.
+echo [*] Comprobando binario local de FFmpeg...
+if not exist "ffmpeg.exe" (
+    echo [!] No se encontro 'ffmpeg.exe' local en la raiz.
+    echo [*] Descargando compilacion completa de FFmpeg (gyan.dev)...
+    python -c "import urllib.request, zipfile, os, shutil; urllib.request.urlretrieve('https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip', 'ffmpeg.zip'); zip_ref = zipfile.ZipFile('ffmpeg.zip', 'r'); zip_ref.extractall('ffmpeg_temp'); zip_ref.close(); [shutil.copy(os.path.join(r, 'ffmpeg.exe'), 'ffmpeg.exe') for r, d, f in os.walk('ffmpeg_temp') if 'ffmpeg.exe' in f]; shutil.rmtree('ffmpeg_temp'); os.remove('ffmpeg.zip')"
+    if exist "ffmpeg.exe" (
+        echo [OK] ffmpeg.exe descargado y configurado correctamente en la raiz.
+    ) else (
+        echo [!] Error al descargar/extraer ffmpeg.exe. Por favor descarguelo manualmente de gyan.dev.
+    )
+) else (
+    echo [OK] ffmpeg.exe ya esta presente en la raiz.
+)
+
 :: 4. Install Playwright Browsers
 echo.
 echo [*] Instalando binarios de Playwright (Chromium para Instagram)...

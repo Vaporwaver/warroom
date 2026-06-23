@@ -95,22 +95,78 @@ def get_ffmpeg_path():
     # 1. Check local workspace directory first (full-featured FFmpeg)
     project_dir = os.path.dirname(os.path.abspath(__file__))
     local_ffmpeg = os.path.join(project_dir, "ffmpeg.exe")
+    resolved = None
     if os.path.exists(local_ffmpeg):
-        return local_ffmpeg
+        resolved = local_ffmpeg
+    elif shutil.which("ffmpeg") is not None:
+        resolved = "ffmpeg"
+    else:
+        import glob
+        playwright_dir = os.path.expanduser(r"~\AppData\Local\ms-playwright")
+        ffmpeg_glob = os.path.join(playwright_dir, "ffmpeg-*", "ffmpeg-win64.exe")
+        matches = glob.glob(ffmpeg_glob)
+        if matches:
+            resolved = matches[0]
+            
+    # Write to a debug file in the scratch folder
+    try:
+        log_dir = os.path.join(project_dir, "scratch")
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "ffmpeg_resolution_log.txt"), "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - resolved path: {resolved}\n")
+    except Exception:
+        pass
         
-    # 2. Check system PATH first
-    if shutil.which("ffmpeg") is not None:
-        return "ffmpeg"
-    
-    # 3. Check Playwright custom installation
-    import glob
-    playwright_dir = os.path.expanduser(r"~\AppData\Local\ms-playwright")
-    ffmpeg_glob = os.path.join(playwright_dir, "ffmpeg-*", "ffmpeg-win64.exe")
-    matches = glob.glob(ffmpeg_glob)
-    if matches:
-        return matches[0]
+    return resolved
+
+
+def download_local_ffmpeg():
+    zip_path = None
+    temp_dir = None
+    try:
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+        local_ffmpeg = os.path.join(project_dir, "ffmpeg.exe")
+        if os.path.exists(local_ffmpeg):
+            return True
+            
+        import urllib.request
+        import zipfile
         
-    return None
+        url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+        zip_path = os.path.join(project_dir, "ffmpeg.zip")
+        temp_dir = os.path.join(project_dir, "ffmpeg_temp")
+        
+        # Download
+        urllib.request.urlretrieve(url, zip_path)
+        
+        # Extract
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+            
+        # Find and copy ffmpeg.exe
+        for root, dirs, files in os.walk(temp_dir):
+            if "ffmpeg.exe" in files:
+                shutil.copy(os.path.join(root, "ffmpeg.exe"), local_ffmpeg)
+                break
+                
+        # Clean up
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            
+        return os.path.exists(local_ffmpeg)
+    except Exception:
+        # Clean up in case of failure
+        try:
+            if zip_path and os.path.exists(zip_path):
+                os.remove(zip_path)
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+        except Exception:
+            pass
+        return False
+
 
 # Diagnostic helper
 def check_system_status():
