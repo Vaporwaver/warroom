@@ -1554,7 +1554,8 @@ class MonitoringEngine:
                                 "last_checked": time.time(),
                                 "error": str(exc)
                             }
-                            self.log_event(f"Error ejecutando scraper {name}: {exc}")
+                            ffmpeg_bin = get_ffmpeg_path()
+                            self.log_event(f"Error ejecutando scraper {name}: {exc} (ffmpeg: `{ffmpeg_bin}`)")
             
             self.log_event("Ciclo de monitoreo paralelo completado. Esperando intervalo...")
             # Sleep in increments of 1 second checking stop event to remain responsive
