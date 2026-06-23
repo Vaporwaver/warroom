@@ -67,6 +67,30 @@ def extract_rss_domain(url):
     except Exception:
         return "RSS"
 
+def clean_ffmpeg_error(stderr_bytes):
+    try:
+        stderr_str = stderr_bytes.decode('utf-8', errors='ignore')
+    except Exception:
+        stderr_str = str(stderr_bytes)
+        
+    lines = [line.strip() for line in stderr_str.split("\n") if line.strip()]
+    clean_lines = []
+    for line in lines:
+        if (line.startswith("ffmpeg version") or 
+            line.startswith("built with") or 
+            line.startswith("configuration:") or 
+            line.startswith("libav") or 
+            line.startswith("libsw") or 
+            line.startswith("libpostproc") or 
+            line.startswith("  built with") or
+            line.startswith("  configuration:")):
+            continue
+        clean_lines.append(line)
+        
+    if clean_lines:
+        return " | ".join(clean_lines[-3:])
+    return lines[-1] if lines else "Unknown FFmpeg error"
+
 def get_ffmpeg_path():
     # 1. Check local workspace directory first (full-featured FFmpeg)
     local_ffmpeg = os.path.join(os.getcwd(), "ffmpeg.exe")
@@ -184,16 +208,16 @@ class RadioScraper:
                 'no_warnings': True,
                 'skip_download': True,
             }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(self.tunein_url, download=False)
-                stream_url = None
-                if 'url' in info:
-                    stream_url = info['url']
-                elif 'formats' in info and len(info['formats']) > 0:
-                    stream_url = info['formats'][0]['url']
-                
-            if not stream_url:
-                raise ValueError("No stream URL resolved by yt-dlp")
+            stream_url = self.tunein_url
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(self.tunein_url, download=False)
+                    if 'url' in info:
+                        stream_url = info['url']
+                    elif 'formats' in info and len(info['formats']) > 0:
+                        stream_url = info['formats'][0]['url']
+            except Exception:
+                pass
 
             # 2. Check ffmpeg and record
             ffmpeg_bin = get_ffmpeg_path()
@@ -203,8 +227,21 @@ class RadioScraper:
             temp_dir = tempfile.gettempdir()
             temp_audio = os.path.join(temp_dir, f"radio_temp_{int(time.time())}.wav")
             
-            cmd = [
-                ffmpeg_bin, "-y", "-i", stream_url, "-t", str(self.duration),
+            cmd = [ffmpeg_bin, "-y"]
+            headers_str = ""
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            if "telemicro.com.do" in stream_url:
+                headers_str = "Referer: https://telemicro.com.do/players/5tv/\r\n"
+            elif "castr.com" in stream_url:
+                headers_str = "Referer: https://player.castr.com/\r\n"
+                
+            if headers_str:
+                cmd += ["-headers", headers_str]
+            if user_agent:
+                cmd += ["-user_agent", user_agent]
+                
+            cmd += [
+                "-i", stream_url, "-t", str(self.duration),
                 "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", temp_audio
             ]
             
@@ -217,7 +254,7 @@ class RadioScraper:
             )
             
             if result.returncode != 0:
-                raise RuntimeError(f"FFmpeg failed: {result.stderr.decode('utf-8', errors='ignore')}")
+                raise RuntimeError(f"FFmpeg failed: {clean_ffmpeg_error(result.stderr)}")
             
             if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) == 0:
                 raise RuntimeError("FFmpeg generated an empty or non-existent audio file")
@@ -483,7 +520,7 @@ class YouTubeScraper:
                         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
                         
                         if result.returncode != 0:
-                            raise RuntimeError(f"FFmpeg falló: {result.stderr.decode('utf-8', errors='ignore')}")
+                            raise RuntimeError(f"FFmpeg falló: {clean_ffmpeg_error(result.stderr)}")
                             
                         # 3. Transcribe with Whisper
                         log(f"Transcribiendo audio localmente con Whisper para {video_id}...")
@@ -933,7 +970,12 @@ class RSSScraper:
             with urllib.request.urlopen(req, timeout=10.0) as response:
                 xml_data = response.read()
                 
-            root = ET.fromstring(xml_data)
+            # Clean XML string to avoid strict parsing issues
+            xml_str = xml_data.decode('utf-8', errors='replace')
+            # Replace unescaped & with &amp;
+            xml_str = re.sub(r'&(?!([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', xml_str)
+            
+            root = ET.fromstring(xml_str.encode('utf-8'))
             items = root.findall('.//item')
             log(f"RSS ({self.feed_name}) parseado. {len(items)} noticias encontradas.")
             
@@ -1046,16 +1088,35 @@ class TVScraper:
                 'no_warnings': True,
                 'skip_download': True,
             }
-            resolved_url = self.stream_url
+            is_youtube = "youtube.com" in self.stream_url or "youtu.be" in self.stream_url
+            resolved_url = None
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 try:
                     info = ydl.extract_info(self.stream_url, download=False)
                     if 'url' in info:
                         resolved_url = info['url']
                     elif 'formats' in info and len(info['formats']) > 0:
-                        resolved_url = info['formats'][0]['url']
-                except Exception:
+                        # Intentar buscar formato HLS directo (.m3u8) para ffmpeg
+                        for f in info['formats']:
+                            if f.get('protocol') == 'm3u8_native' or '.m3u8' in f.get('url', ''):
+                                resolved_url = f['url']
+                                break
+                        if not resolved_url:
+                            resolved_url = info['formats'][0]['url']
+                except Exception as e:
+                    if is_youtube:
+                        err_msg = str(e)
+                        if "not currently live" in err_msg or "is not live" in err_msg:
+                            raise Exception("El canal de YouTube no está transmitiendo en vivo actualmente.")
+                        else:
+                            raise Exception(f"No se pudo resolver la transmisión en vivo de YouTube: {err_msg}")
+                    # Para otros streams, simplemente ignorar y probar con URL original
                     pass
+                    
+            if not resolved_url:
+                if is_youtube:
+                    raise Exception("No se pudo obtener la URL de transmisión en vivo de YouTube.")
+                resolved_url = self.stream_url
 
             # 2. Check ffmpeg and record video + audio
             ffmpeg_bin = get_ffmpeg_path()
@@ -1068,15 +1129,28 @@ class TVScraper:
             temp_audio = os.path.join(temp_dir, f"tv_temp_{ts}.wav")
             
             # Record video (MP4) from live stream for duration seconds
-            cmd_video = [
-                ffmpeg_bin, "-y", "-i", resolved_url, "-t", str(self.duration),
+            cmd_video = [ffmpeg_bin, "-y"]
+            headers_str = ""
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            if "telemicro.com.do" in resolved_url:
+                headers_str = "Referer: https://telemicro.com.do/players/5tv/\r\n"
+            elif "castr.com" in resolved_url:
+                headers_str = "Referer: https://player.castr.com/\r\n"
+                
+            if headers_str:
+                cmd_video += ["-headers", headers_str]
+            if user_agent:
+                cmd_video += ["-user_agent", user_agent]
+                
+            cmd_video += [
+                "-i", resolved_url, "-t", str(self.duration),
                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                 "-c:a", "aac", "-ac", "1", "-ar", "16000", temp_video
             ]
             
             result = subprocess.run(cmd_video, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=self.duration + 20)
             if result.returncode != 0:
-                raise RuntimeError(f"FFmpeg video recording failed: {result.stderr.decode('utf-8', errors='ignore')}")
+                raise RuntimeError(f"FFmpeg video recording failed: {clean_ffmpeg_error(result.stderr)}")
                 
             # Extract audio track to WAV mono 16kHz
             cmd_audio = [
@@ -1284,19 +1358,20 @@ class OllamaAnalyzer:
         }
 
 def get_scraper_display_name(scraper):
-    if isinstance(scraper, RadioScraper):
+    cls_name = scraper.__class__.__name__
+    if cls_name == "RadioScraper":
         return f"📻 Radio ({scraper.name})"
-    elif isinstance(scraper, TVScraper):
+    elif cls_name == "TVScraper":
         return f"📺 TV ({scraper.name})"
-    elif isinstance(scraper, YouTubeScraper):
+    elif cls_name == "YouTubeScraper":
         name = getattr(scraper, "channel_name", "") or scraper.channel_url
         if name.startswith("http"):
             if "/@" in name:
                 name = "@" + name.split("/@")[-1].split("/")[0]
         return f"🎥 YouTube ({name})"
-    elif isinstance(scraper, InstagramScraper):
+    elif cls_name == "InstagramScraper":
         return f"📸 Instagram (@{scraper.username})"
-    elif isinstance(scraper, RSSScraper):
+    elif cls_name == "RSSScraper":
         return f"📰 RSS ({scraper.feed_name})"
     return str(scraper)
 
@@ -1429,9 +1504,10 @@ class MonitoringEngine:
             # Update scraper configurations dynamically
             for scraper in self.scrapers:
                 scraper.keywords = self.keywords
-                if isinstance(scraper, RadioScraper) or isinstance(scraper, TVScraper):
+                cls_name = scraper.__class__.__name__
+                if cls_name in ("RadioScraper", "TVScraper"):
                     scraper.whisper_model_name = self.whisper_model
-                elif isinstance(scraper, InstagramScraper):
+                elif cls_name == "InstagramScraper":
                     scraper.sessionid = self.instagram_sessionid
             self.analyzer.model_name = self.ollama_model
             
@@ -1449,11 +1525,12 @@ class MonitoringEngine:
                         if self.force_simulation:
                             futures[executor.submit(scraper.get_simulated_mention)] = scraper
                         else:
-                            if isinstance(scraper, YouTubeScraper):
+                            cls_name = scraper.__class__.__name__
+                            if cls_name == "YouTubeScraper":
                                 futures[executor.submit(scraper.scrape, self)] = scraper
-                            elif isinstance(scraper, RSSScraper) or isinstance(scraper, InstagramScraper):
+                            elif cls_name in ("RSSScraper", "InstagramScraper"):
                                 futures[executor.submit(scraper.scrape, self)] = scraper
-                            elif isinstance(scraper, RadioScraper) or isinstance(scraper, TVScraper):
+                            elif cls_name in ("RadioScraper", "TVScraper"):
                                 futures[executor.submit(scraper.scrape)] = scraper
                                 
                     for future in as_completed(futures):

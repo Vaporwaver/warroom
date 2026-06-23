@@ -9,9 +9,84 @@ import textwrap
 # Import scrapers backend
 import scrapers
 import database
+import importlib
+importlib.reload(database)
+importlib.reload(scrapers)
 import subprocess
 import tempfile
 import base64
+
+DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/n7rwu4qg5zhvv
+CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
+Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
+Escándalo 102.5 | https://stream.zeno.fm/iwqlyzpyry1uv
+Estación 97.7 | https://stream2.rcast.net/61187
+Fidelity (94.1) | https://stream.fidelityfm.com.do/fidelity
+Independencia (93.3) | https://stream.radiojar.com/nc893hafc8zuv
+La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
+La Bakana (105.7) | https://stream.zeno.fm/0zt7qptffphvv
+La Nota Diferente | https://tunein.com/radio/La-Nota-957-FM-s256372/
+La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
+La Voz FF.AA. (HIFA) | https://stream.zeno.fm/nus3bdqxi4qtv
+La X 102.1 | https://audio.livecastnet.com:2535/stream
+La Z101 FM | https://streaming.z101digital.com/z101
+Latidos FM (93.7) | https://stream.zeno.fm/fr5uatdjvckuv
+Los 40 (103.3) | https://stream.zeno.fm/sse58hcighnvv?dist=play
+Pura Vida (96.7) | https://stream.zeno.fm/veeugp2tz68uv
+Radio Monumental | http://radio2.grupointernet.com:8103/stream
+Ritmo 96.5 FM | https://stream-49.zeno.fm/y0br5ck4ququv
+Rumba FM | https://stream.zeno.fm/eticl2rpposvv
+Sentido 89.3 | https://stream.zeno.fm/gcw7xssprnruv
+Súper Q 100.9 | https://stream.zeno.fm/49lw5ggyujfvv
+Top Latina 101.7 | https://stream.zeno.fm/e6kpq5hgckatv
+Turbo 98 FM | https://stream.zeno.fm/s6c01714pa0uv
+Zol 106.5 FM | https://stream.zeno.fm/w6x7q7dtpy5tv"""
+
+DEFAULT_TV_CHANNELS = """Acento TV | https://acentotv01.streamprolive.com/hls/live.m3u8
+Ahora TV | https://stream.haislin.com/ahoratv/index.m3u8
+Amé (Canal 47) | https://ss2.tvrdomi.com:1936/ame47/ame47/playlist.m3u8
+Antena 7 | https://d3mhrz6vhsrmmq.cloudfront.net/index.m3u8
+Boreal Televisión | https://edge.essastream.com/borealtelevision/tracks-v1a1/mono.m3u8
+Canal del Sol | https://stream.canaldelsol.com/sol26/live_1080.m3u8
+Canal Seis | https://stream.elseis.do/canal6/live_1080.m3u8
+CDN | https://www.youtube.com/@cdn37rd/live
+Cibao Súper TV (Canal 55) | https://ss2.tvrdomi.com:1936/supertv55/supertv55/playlist.m3u8
+Cine Visión 19 | https://5790d294af2dc.streamlock.net/tvhdlive/tvhdlive/playlist.m3u8
+Color Vision | http://190.122.104.210:5080/LiveApp/streams/cvision1.m3u8
+Coral TV | https://www.youtube.com/@Coral39RD/live
+Digital Quince | http://190.122.104.210:5080/LiveApp/streams/Di15.m3u8
+El Demócrata | https://www.youtube.com/@eldemocratard/live
+El Nuevo Diario TV | https://nuevodiario01.streamprolive.com/hls/live.m3u8
+En Televisión (Canal 31) | https://stream.haislin.com/entelevision/index.m3u8
+Hilando Fino TV | https://hilandofinotv.essastream.com:3606/live/canalhilandofinotvlive.m3u8
+Luna TV (Canal 53) | https://tv.wracanal10.com:3671/live/lunatvcanal53live.m3u8
+Mia Visión | https://edge.essastream.com/miavisiontv/playlist.m3u8
+Microvisión (Canal 10) | https://streaming.telecablecentral.com.do/live/MicroHD/playlist.m3u8
+RNN | https://2-fss-2.streamhoster.com/pl_138/206532-6829902-1/playlist.m3u8
+RTVD (Canal 4) | https://protvradiostream.com:1936/canal4rd-1/ngrp:canal4rd-1_all/playlist.m3u8
+Su Mundo TV | https://www.youtube.com/@sumundotv/live
+Súper Canal | https://cnn.hostlagarto.com/supercanalhd/playlist.m3u8
+Teleantillas | https://www.youtube.com/@teleantillas10/live
+Telecentro | http://190.122.104.210:5080/LiveApp/streams/tcentro.m3u8
+Telecontacto (Canal 57) | https://streaming.grupomediosdelnorte.com:19360/telecontacto/telecontacto.m3u8
+Luna TV (Canal 25) | https://www.youtube.com/@LunaTVCanal25/live
+Telemicro | https://live4.telemicro.com.do/live/telemicrocast_1080p/playlist.m3u8
+TeleNord | https://fox.hostlagarto.com:8081/telenord8/playlist.m3u8
+Teleradioamérica | https://www.youtube.com/@canaltrard/live
+Telesistema | https://www.youtube.com/@Telesistema11rd/live
+Teleunion (Canal 16) | http://server2grupocam.com:1945/teleunion/TU/playlist.m3u8
+Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kptjeckkaa.m3u8
+Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_c0b655e0659a11f187d6955330845e08/index.fmp4.m3u8
+VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
+
+DEFAULT_RSS_FEEDS = """https://www.diariolibre.com/rss/portada.xml
+https://eldia.com.do/feed/
+https://elnuevodiario.com.do/feed/
+https://remolacha.net/feed/
+https://almomento.net/feed/
+https://noticiassin.com/feed/
+https://deultimominuto.net/feed/
+https://eldinero.com.do/feed/"""
 
 def test_smtp_connection(config):
     import smtplib
@@ -418,6 +493,22 @@ if "force_simulation" not in st.session_state:
     # Default to simulation if dependencies are missing, to guarantee smooth operation out-of-the-box
     st.session_state.force_simulation = missing_deps
 
+# Initialize persistent configuration values from database
+if "radio_channels_val" not in st.session_state:
+    st.session_state["radio_channels_val"] = database.get_state("config_radio_channels", DEFAULT_RADIO_CHANNELS)
+if "tv_channels_val" not in st.session_state:
+    st.session_state["tv_channels_val"] = database.get_state("config_tv_channels", DEFAULT_TV_CHANNELS)
+if "youtube_channels_val" not in st.session_state:
+    st.session_state["youtube_channels_val"] = database.get_state("config_youtube_channels", "https://www.youtube.com/@nuriapiera/videos")
+if "instagram_users_val" not in st.session_state:
+    st.session_state["instagram_users_val"] = database.get_state("config_instagram_users", "nuriapiera")
+if "rss_feeds_val" not in st.session_state:
+    st.session_state["rss_feeds_val"] = database.get_state("config_rss_feeds", DEFAULT_RSS_FEEDS)
+
+def save_config(key, db_key):
+    val = st.session_state.get(key, "")
+    database.set_state(db_key, val)
+
 # --- SIDEBAR: Configuration & Control ---
 if os.path.exists("assets/logo.png"):
     st.sidebar.image("assets/logo.png", use_container_width=True)
@@ -578,31 +669,31 @@ if not st.session_state.monitoring_active:
     st.session_state.keywords_input_state = union_kws_str
     st.session_state.keywords_str = union_kws_str
     
-    DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/q1y9wz4r7uquv
+    DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/n7rwu4qg5zhvv
 CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
 Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
-Escándalo 102.5 | https://stream.zeno.fm/1fbf8rrgvzzuv
+Escándalo 102.5 | https://stream.zeno.fm/iwqlyzpyry1uv
 Estación 97.7 | https://stream2.rcast.net/61187
 Fidelity (94.1) | https://stream.fidelityfm.com.do/fidelity
-Independencia (93.3) | http://stream.grupotelemicro.com:9303/;stream.mp3
+Independencia (93.3) | https://stream.radiojar.com/nc893hafc8zuv
 La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
-La Bakana (105.7) | https://stream.zeno.fm/8x9cd7buqg8uv
-La Nota Diferente | https://stream.zeno.fm/r1y9wz4r7uquv
+La Bakana (105.7) | https://stream.zeno.fm/0zt7qptffphvv
+La Nota Diferente | https://tunein.com/radio/La-Nota-957-FM-s256372/
 La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
-La Voz FF.AA. (HIFA) | https://stream.hifa.mil.do/hifa
+La Voz FF.AA. (HIFA) | https://stream.zeno.fm/nus3bdqxi4qtv
 La X 102.1 | https://audio.livecastnet.com:2535/stream
 La Z101 FM | https://streaming.z101digital.com/z101
-Latidos FM (93.7) | https://stream.zeno.fm/latidos
+Latidos FM (93.7) | https://stream.zeno.fm/fr5uatdjvckuv
 Los 40 (103.3) | https://stream.zeno.fm/sse58hcighnvv?dist=play
-Pura Vida (96.7) | https://stream.zeno.fm/7x9cd7buqg8uv
-Radio Monumental | https://radio2.grupointernet.com:8103/stream
+Pura Vida (96.7) | https://stream.zeno.fm/veeugp2tz68uv
+Radio Monumental | http://radio2.grupointernet.com:8103/stream
 Ritmo 96.5 FM | https://stream-49.zeno.fm/y0br5ck4ququv
-Rumba FM | https://stream.telemicro.com.do/rumba
-Sentido 89.3 | https://stream.zeno.fm/3x9cd7buqg8uv
-Súper Q 100.9 | https://stream.zeno.fm/4x9cd7buqg8uv
-Top Latina 101.7 | https://stream.zeno.fm/5x9cd7buqg8uv
-Turbo 98 FM | https://stream.zeno.fm/6x9cd7buqg8uv
-Zol 106.5 FM | https://stream.zeno.fm/zolfm1065"""
+Rumba FM | https://stream.zeno.fm/eticl2rpposvv
+Sentido 89.3 | https://stream.zeno.fm/gcw7xssprnruv
+Súper Q 100.9 | https://stream.zeno.fm/49lw5ggyujfvv
+Top Latina 101.7 | https://stream.zeno.fm/e6kpq5hgckatv
+Turbo 98 FM | https://stream.zeno.fm/s6c01714pa0uv
+Zol 106.5 FM | https://stream.zeno.fm/w6x7q7dtpy5tv"""
 
     DEFAULT_TV_CHANNELS = """Acento TV | https://acentotv01.streamprolive.com/hls/live.m3u8
 Ahora TV | https://stream.haislin.com/ahoratv/index.m3u8
@@ -611,13 +702,13 @@ Antena 7 | https://d3mhrz6vhsrmmq.cloudfront.net/index.m3u8
 Boreal Televisión | https://edge.essastream.com/borealtelevision/tracks-v1a1/mono.m3u8
 Canal del Sol | https://stream.canaldelsol.com/sol26/live_1080.m3u8
 Canal Seis | https://stream.elseis.do/canal6/live_1080.m3u8
-CDN | http://200.125.170.121:8000/play/a09j/index.m3u8
+CDN | https://www.youtube.com/@cdn37rd/live
 Cibao Súper TV (Canal 55) | https://ss2.tvrdomi.com:1936/supertv55/supertv55/playlist.m3u8
 Cine Visión 19 | https://5790d294af2dc.streamlock.net/tvhdlive/tvhdlive/playlist.m3u8
 Color Vision | http://190.122.104.210:5080/LiveApp/streams/cvision1.m3u8
 Coral TV | https://www.youtube.com/@Coral39RD/live
 Digital Quince | http://190.122.104.210:5080/LiveApp/streams/Di15.m3u8
-El Demócrata | https://www.youtube.com/@ElDemocrata/live
+El Demócrata | https://www.youtube.com/@eldemocratard/live
 El Nuevo Diario TV | https://nuevodiario01.streamprolive.com/hls/live.m3u8
 En Televisión (Canal 31) | https://stream.haislin.com/entelevision/index.m3u8
 Hilando Fino TV | https://hilandofinotv.essastream.com:3606/live/canalhilandofinotvlive.m3u8
@@ -626,65 +717,63 @@ Mia Visión | https://edge.essastream.com/miavisiontv/playlist.m3u8
 Microvisión (Canal 10) | https://streaming.telecablecentral.com.do/live/MicroHD/playlist.m3u8
 RNN | https://2-fss-2.streamhoster.com/pl_138/206532-6829902-1/playlist.m3u8
 RTVD (Canal 4) | https://protvradiostream.com:1936/canal4rd-1/ngrp:canal4rd-1_all/playlist.m3u8
-Su Mundo TV | https://appapi.sumundotv.com/api/stream-proxy/4pf8yy3WF1xp1_tQ6yUYRIsbwyLc3qxDRcZAY_NLNDs/playlist.m3u8
+Su Mundo TV | https://www.youtube.com/@sumundotv/live
 Súper Canal | https://cnn.hostlagarto.com/supercanalhd/playlist.m3u8
-Teleantillas | http://200.125.170.122:8000/play/a0cg/index.m3u8
+Teleantillas | https://www.youtube.com/@teleantillas10/live
 Telecentro | http://190.122.104.210:5080/LiveApp/streams/tcentro.m3u8
 Telecontacto (Canal 57) | https://streaming.grupomediosdelnorte.com:19360/telecontacto/telecontacto.m3u8
-Telemedios 25 | https://www.youtube.com/@Canal25RD/live
+Luna TV (Canal 25) | https://www.youtube.com/@LunaTVCanal25/live
 Telemicro | https://live4.telemicro.com.do/live/telemicrocast_1080p/playlist.m3u8
 TeleNord | https://fox.hostlagarto.com:8081/telenord8/playlist.m3u8
-Teleradioamérica | https://soportedvb.click:3020/live/teleradioamericalive.m3u8
-Telesistema | http://200.125.170.122:8000/play/a0ci/index.m3u8
+Teleradioamérica | https://www.youtube.com/@canaltrard/live
+Telesistema | https://www.youtube.com/@Telesistema11rd/live
 Teleunion (Canal 16) | http://server2grupocam.com:1945/teleunion/TU/playlist.m3u8
 Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kptjeckkaa.m3u8
-Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_ee0c4e703a7311f18cbf95410dc72949/index.fmp4.m3u8
+Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_c0b655e0659a11f187d6955330845e08/index.fmp4.m3u8
 VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
 
     DEFAULT_RSS_FEEDS = """https://www.diariolibre.com/rss/portada.xml
 https://eldia.com.do/feed/
-https://www.elcaribe.com.do/feed/
 https://elnuevodiario.com.do/feed/
-https://listindiario.com/rss/
-https://hoy.com.do/feed/
 https://remolacha.net/feed/
-https://elnacional.com.do/feed/
-https://acento.com.do/feed/
 https://almomento.net/feed/
 https://noticiassin.com/feed/
 https://deultimominuto.net/feed/
-https://z101digital.com/feed/
-https://eldinero.com.do/feed/
-https://cdn.com.do/feed/"""
+https://eldinero.com.do/feed/"""
 
     st.sidebar.text_area(
         "Emisoras de Radio (Nombre | URL)",
-        value=DEFAULT_RADIO_CHANNELS,
         key="radio_channels_val",
+        on_change=save_config,
+        args=("radio_channels_val", "config_radio_channels"),
         help="Ingresa Nombre | URL de streaming de audio por línea."
     )
     st.sidebar.text_area(
         "Canales de TV (Nombre | URL)",
-        value=DEFAULT_TV_CHANNELS,
         key="tv_channels_val",
+        on_change=save_config,
+        args=("tv_channels_val", "config_tv_channels"),
         help="Ingresa Nombre | URL de streaming de video por línea."
     )
     st.sidebar.text_area(
         "Canales de YouTube (URLs)",
-        value="https://www.youtube.com/@nuriapiera/videos",
         key="youtube_channels_val",
+        on_change=save_config,
+        args=("youtube_channels_val", "config_youtube_channels"),
         help="Ingresa una URL de canal por línea."
     )
     st.sidebar.text_area(
         "Usuarios de Instagram",
-        value="nuriapiera",
         key="instagram_users_val",
+        on_change=save_config,
+        args=("instagram_users_val", "config_instagram_users"),
         help="Ingresa un usuario por línea (sin @)."
     )
     st.sidebar.text_area(
         "Feeds RSS (URLs)",
-        value=DEFAULT_RSS_FEEDS,
         key="rss_feeds_val",
+        on_change=save_config,
+        args=("rss_feeds_val", "config_rss_feeds"),
         help="Ingresa una URL de feed RSS por línea."
     )
 else:
@@ -747,6 +836,29 @@ with st.sidebar.expander("📧 Configuración SMTP"):
                     st.success("✅ Conexión SMTP exitosa. Correo de prueba enviado.")
                 else:
                     st.error(f"❌ Error de conexión: {test_err}")
+
+# --- DANGER ZONE (RESET DATABASE) ---
+with st.sidebar.expander("⚠️ Zona de Peligro"):
+    st.markdown("<small style='color: #e74c3c;'>Esta acción borrará todas las alertas, historial y clientes registrados, restableciendo el sistema a su estado inicial. Las configuraciones de canales no se perderán.</small>", unsafe_allow_html=True)
+    confirm_reset = st.checkbox("Confirmar borrado completo", key="confirm_reset_db_checkbox")
+    if st.button("🗑️ Borrar Todos los Datos", type="primary", use_container_width=True, disabled=not confirm_reset):
+        # 1. Stop monitoring if running
+        if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
+            st.session_state.engine.stop()
+            st.session_state.monitoring_active = False
+            
+        # 2. Reset database
+        database.reset_entire_database()
+        
+        # 3. Reset session states
+        st.session_state.active_client_id = 1
+        st.session_state.alerts = []
+        st.session_state.approved_alerts = []
+        st.session_state.approved_count = 0
+        st.session_state.system_logs = ["⏱️ `[" + datetime.now().strftime("%H:%M:%S") + "]` Base de datos restablecida completamente."]
+        
+        st.success("✅ Base de datos borrada con éxito.")
+        st.rerun()
 
 # --- DIAGNOSTICS DISPLAY ---
 st.sidebar.markdown("### 🔍 Diagnóstico de Dependencias")
@@ -1648,13 +1760,21 @@ with col_left:
                         if enabled_toggle != is_enabled:
                             database.update_client_enabled(c['id'], 1 if enabled_toggle else 0)
                             st.rerun()
+                        
+                        # Botón para cargar este cliente directamente en el formulario de edición
+                        edit_btn_key = f"edit_client_btn_{c['id']}"
+                        if st.button("✏️ Editar Datos", key=edit_btn_key, use_container_width=True):
+                            st.session_state.client_form_action = f"✏️ Editar: {c['name']}"
+                            st.rerun()
         
         with col_form:
             st.markdown("##### Agregar / Editar Cliente")
             
             # Option to add new or select existing to edit
             form_options = ["🆕 Agregar Nuevo Cliente"] + [f"✏️ Editar: {c['name']}" for c in clients]
-            selected_option = st.selectbox("Seleccione una acción:", options=form_options)
+            if "client_form_action" not in st.session_state or st.session_state.client_form_action not in form_options:
+                st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
+            selected_option = st.selectbox("Seleccione una acción:", options=form_options, key="client_form_action")
             
             # Setup form fields based on selection
             if selected_option == "🆕 Agregar Nuevo Cliente":
@@ -1691,9 +1811,20 @@ with col_left:
                     else:
                         client_id = target_client["id"] if edit_mode else None
                         try:
-                            database.save_client(client_id, form_name.strip(), form_email.strip(), form_keywords.strip(), form_desc.strip())
-                            st.success("✅ Cliente guardado con éxito.")
-                            st.rerun()
+                            # Verificar si ya existe un cliente con el mismo nombre (fácilmente prevenible antes de tocar la DB)
+                            name_exists = False
+                            if not edit_mode:
+                                name_exists = any(c["name"].lower() == form_name.strip().lower() for c in clients)
+                            else:
+                                name_exists = any(c["name"].lower() == form_name.strip().lower() and c["id"] != client_id for c in clients)
+                            
+                            if name_exists:
+                                st.error(f"❌ Ya existe un cliente con el nombre '{form_name.strip()}'. Si desea editar sus datos, selecciónelo en 'Seleccione una acción' arriba o pulse el botón '✏️ Editar Datos' de su tarjeta a la izquierda.")
+                            else:
+                                database.save_client(client_id, form_name.strip(), form_email.strip(), form_keywords.strip(), form_desc.strip())
+                                st.success("✅ Cliente guardado con éxito.")
+                                st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Error al guardar cliente: {e}")
             with col_b2:
@@ -1711,12 +1842,26 @@ with col_left:
                                 if st.session_state.active_client_id == target_client["id"]:
                                     remaining_clients = [c for c in clients if c["id"] != target_client["id"]]
                                     st.session_state.active_client_id = remaining_clients[0]["id"]
+                                st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al eliminar cliente: {e}")
 
 with col_right:
     st.subheader("📊 Métricas de Medios")
+    
+    # Contador de noticias/contenido verificado (Instagram, RSS, YouTube)
+    processed_counts = database.get_processed_counts()
+    st.markdown("##### 🔍 Contenido Verificado (Escaneado)")
+    col_v1, col_v2, col_v3 = st.columns(3)
+    with col_v1:
+        st.metric(label="📸 Instagram", value=processed_counts["instagram"])
+    with col_v2:
+        st.metric(label="📰 RSS", value=processed_counts["rss"])
+    with col_v3:
+        st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
+    
+    st.markdown("---")
     
     # Graphic: Distribution by source
     sources = [a["source"] for a in st.session_state.alerts]

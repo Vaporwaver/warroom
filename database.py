@@ -306,6 +306,30 @@ def get_source_counts(status='pending', client_id=None):
     conn.close()
     return dict(rows)
 
+@with_db_lock
+def get_processed_counts():
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    
+    # Instagram count
+    cursor.execute("SELECT COUNT(*) FROM processed_content WHERE source = 'instagram'")
+    ig_count = cursor.fetchone()[0]
+    
+    # RSS count
+    cursor.execute("SELECT COUNT(*) FROM processed_content WHERE source LIKE 'rss_%'")
+    rss_count = cursor.fetchone()[0]
+    
+    # YouTube count
+    cursor.execute("SELECT COUNT(*) FROM processed_content WHERE source LIKE 'youtube_%'")
+    yt_count = cursor.fetchone()[0]
+    
+    conn.close()
+    return {
+        "instagram": ig_count,
+        "rss": rss_count,
+        "youtube": yt_count
+    }
+
 # --- Clients CRUD functions ---
 
 @with_db_lock
@@ -359,5 +383,25 @@ def delete_client(client_id):
     cursor = conn.cursor()
     cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
     cursor.execute("DELETE FROM alerts WHERE client_id = ?", (client_id,))
+    conn.commit()
+    conn.close()
+
+@with_db_lock
+def reset_entire_database():
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM processed_content")
+    cursor.execute("DELETE FROM alerts")
+    cursor.execute("DELETE FROM clients")
+    # Preserve config_%, smtp_config and github_token, delete others
+    cursor.execute("""
+    DELETE FROM system_state 
+    WHERE key NOT LIKE 'config_%' AND key != 'smtp_config' AND key != 'github_token'
+    """)
+    # Re-seed default client
+    cursor.execute("""
+    INSERT INTO clients (id, name, email, keywords, description, enabled)
+    VALUES (1, ?, ?, ?, ?, 1)
+    """, ("Cliente General", "", "", "Monitoreo general de noticias y relaciones públicas."))
     conn.commit()
     conn.close()
