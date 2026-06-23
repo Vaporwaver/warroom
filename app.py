@@ -1116,6 +1116,129 @@ else:
                     st.sidebar.error(f"Error al aplicar el archivo ZIP: {e}")
 
 
+@st.fragment(run_every=2)
+def render_right_column():
+    # 1. Process queues from background engine
+    if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
+        engine = st.session_state.engine
+        new_alerts_added = False
+        new_logs_added = False
+        
+        while not engine.alerts_queue.empty():
+            try:
+                _ = engine.alerts_queue.get_nowait()
+                new_alerts_added = True
+            except queue.Empty:
+                break
+                
+        while not engine.logs_queue.empty():
+            try:
+                log_msg = engine.logs_queue.get_nowait()
+                st.session_state.system_logs.insert(0, log_msg)
+                new_logs_added = True
+            except queue.Empty:
+                break
+                
+        if len(st.session_state.system_logs) > 300:
+            st.session_state.system_logs = st.session_state.system_logs[:300]
+            
+        if new_alerts_added:
+            st.session_state.should_reload = True
+            st.rerun()
+
+    # 2. Track SMTP transitions
+    if "prev_smtp_sending" not in st.session_state:
+        st.session_state.prev_smtp_sending = False
+        
+    current_smtp_sending = st.session_state.get("smtp_sending", False)
+    if not current_smtp_sending and st.session_state.prev_smtp_sending:
+        st.session_state.prev_smtp_sending = False
+        st.rerun()
+    st.session_state.prev_smtp_sending = current_smtp_sending
+
+    # 3. Render the metrics and logs in col_right
+    st.subheader("📊 Métricas de Medios")
+    
+    # Contador de noticias/contenido verificado (Instagram, RSS, YouTube)
+    processed_counts = database.get_processed_counts()
+    st.markdown("##### 🔍 Contenido Verificado (Escaneado)")
+    col_v1, col_v2, col_v3 = st.columns(3)
+    with col_v1:
+        st.metric(label="📸 Instagram", value=processed_counts["instagram"])
+    with col_v2:
+        st.metric(label="📰 RSS", value=processed_counts["rss"])
+    with col_v3:
+        st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
+    
+    st.markdown("---")
+    
+    # Graphic: Distribution by source
+    sources = [a["source"] for a in st.session_state.alerts]
+    radio_cnt = sum(1 for s in sources if "Radio" in s)
+    tv_cnt = sum(1 for s in sources if "TV" in s)
+    yt_cnt = sum(1 for s in sources if "YouTube" in s)
+    ig_cnt = sum(1 for s in sources if "Instagram" in s)
+    rss_cnt = sum(1 for s in sources if "RSS" in s)
+    
+    total_m = len(st.session_state.alerts)
+    pos_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Positivo")
+    neu_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Neutral")
+    neg_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Negativo")
+    
+    st.markdown("##### Volumen por Canal")
+    st.progress(radio_cnt / total_m if total_m > 0 else 0.0, text=f"📻 Radio ({radio_cnt})")
+    st.progress(tv_cnt / total_m if total_m > 0 else 0.0, text=f"📺 TV ({tv_cnt})")
+    st.progress(yt_cnt / total_m if total_m > 0 else 0.0, text=f"🎥 YouTube ({yt_cnt})")
+    st.progress(ig_cnt / total_m if total_m > 0 else 0.0, text=f"📸 Instagram ({ig_cnt})")
+    st.progress(rss_cnt / total_m if total_m > 0 else 0.0, text=f"📰 RSS ({rss_cnt})")
+    
+    st.markdown("---")
+    st.markdown("##### Distribución de Sentimiento")
+    st.progress(pos_cnt / total_m if total_m > 0 else 0.0, text=f"🟢 Positivo ({pos_cnt})")
+    st.progress(neu_cnt / total_m if total_m > 0 else 0.0, text=f"🔵 Neutral ({neu_cnt})")
+    st.progress(neg_cnt / total_m if total_m > 0 else 0.0, text=f"🔴 Negativo ({neg_cnt})")
+    
+    # --- Media Uptime Panel ---
+    if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
+        engine = st.session_state.engine
+        if hasattr(engine, "uptime_status") and engine.uptime_status:
+            st.markdown("---")
+            st.subheader("🟢 Uptime de Medios")
+            for name, info in sorted(engine.uptime_status.items()):
+                status = info["status"]
+                err = info["error"]
+                if status == "Online":
+                    status_badge = f"<span style='color:#2ecc71; font-weight:bold;'>🟢 Online</span>"
+                elif status == "Simulando":
+                    status_badge = f"<span style='color:#3498db; font-weight:bold;'>🔵 Simulando</span>"
+                else:
+                    status_badge = f"<span style='color:#e74c3c; font-weight:bold;' title='{err}'>🔴 Offline</span>"
+                
+                st.markdown(f"{name}: {status_badge}", unsafe_allow_html=True)
+                if err:
+                    st.caption(f"⚠️ `{err[:120]}`")
+
+    st.markdown("---")
+    
+    # System Diagnostic Logs Panel
+    st.subheader("📝 Bitácora del Sistema")
+    with st.container(height=300):
+        if not st.session_state.system_logs:
+            st.caption("No hay eventos registrados en la bitácora aún. Inicia el motor para ver trazas de depuración.")
+        else:
+            for log in st.session_state.system_logs:
+                st.markdown(log)
+                
+    if st.session_state.system_logs:
+        clean_logs = "\n".join([log.replace("⏱️ `", "[").replace("`", "]") for log in st.session_state.system_logs])
+        st.download_button(
+            label="💾 Descargar Bitácora Completa (.txt)",
+            data=clean_logs,
+            file_name=f"bitacora_sistema_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
 
 # --- CENTRAL PANEL: Dashboard Visuals ---
 st.markdown("<h1 class='main-title'>War Room - Monitoreo de Medios con IA</h1>", unsafe_allow_html=True)
@@ -1197,37 +1320,6 @@ with col_left:
     tab_validation, tab_report, tab_clients = st.tabs(["📥 Bandeja de Validación", "📝 Generador de Reportes", "👥 Clientes"])
     
     with tab_validation:
-    
-        # Process queue if active
-        if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
-            engine = st.session_state.engine
-            new_alerts_added = False
-            new_logs_added = False
-            
-            while not engine.alerts_queue.empty():
-                try:
-                    # Drain the queue, since they are already saved to database by scrapers.py
-                    _ = engine.alerts_queue.get_nowait()
-                    new_alerts_added = True
-                except queue.Empty:
-                    break
-                    
-            while not engine.logs_queue.empty():
-                try:
-                    log_msg = engine.logs_queue.get_nowait()
-                    st.session_state.system_logs.insert(0, log_msg)
-                    new_logs_added = True
-                except queue.Empty:
-                    break
-                    
-            if len(st.session_state.system_logs) > 300:
-                st.session_state.system_logs = st.session_state.system_logs[:300]
-                
-            if new_alerts_added or new_logs_added:
-                if new_alerts_added:
-                    st.session_state.should_reload = True
-                st.rerun()
-    
         # Render filters
         if st.session_state.alerts:
             st.markdown("##### 🔍 Filtrar y Buscar Alertas")
@@ -1848,86 +1940,4 @@ with col_left:
                                 st.error(f"Error al eliminar cliente: {e}")
 
 with col_right:
-    st.subheader("📊 Métricas de Medios")
-    
-    # Contador de noticias/contenido verificado (Instagram, RSS, YouTube)
-    processed_counts = database.get_processed_counts()
-    st.markdown("##### 🔍 Contenido Verificado (Escaneado)")
-    col_v1, col_v2, col_v3 = st.columns(3)
-    with col_v1:
-        st.metric(label="📸 Instagram", value=processed_counts["instagram"])
-    with col_v2:
-        st.metric(label="📰 RSS", value=processed_counts["rss"])
-    with col_v3:
-        st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
-    
-    st.markdown("---")
-    
-    # Graphic: Distribution by source
-    sources = [a["source"] for a in st.session_state.alerts]
-    radio_cnt = sum(1 for s in sources if "Radio" in s)
-    tv_cnt = sum(1 for s in sources if "TV" in s)
-    yt_cnt = sum(1 for s in sources if "YouTube" in s)
-    ig_cnt = sum(1 for s in sources if "Instagram" in s)
-    rss_cnt = sum(1 for s in sources if "RSS" in s)
-    
-    st.markdown("##### Volumen por Canal")
-    st.progress(radio_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📻 Radio ({radio_cnt})")
-    st.progress(tv_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📺 TV ({tv_cnt})")
-    st.progress(yt_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"🎥 YouTube ({yt_cnt})")
-    st.progress(ig_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📸 Instagram ({ig_cnt})")
-    st.progress(rss_cnt / total_mentions if total_mentions > 0 else 0.0, text=f"📰 RSS ({rss_cnt})")
-    
-    st.markdown("---")
-    st.markdown("##### Distribución de Sentimiento")
-    st.progress(pos_count / total_mentions if total_mentions > 0 else 0.0, text=f"🟢 Positivo ({pos_count})")
-    st.progress(neu_count / total_mentions if total_mentions > 0 else 0.0, text=f"🔵 Neutral ({neu_count})")
-    st.progress(neg_count / total_mentions if total_mentions > 0 else 0.0, text=f"🔴 Negativo ({neg_count})")
-    
-    # --- Media Uptime Panel ---
-    if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
-        engine = st.session_state.engine
-        if hasattr(engine, "uptime_status") and engine.uptime_status:
-            st.markdown("---")
-            st.subheader("🟢 Uptime de Medios")
-            for name, info in sorted(engine.uptime_status.items()):
-                status = info["status"]
-                err = info["error"]
-                if status == "Online":
-                    status_badge = f"<span style='color:#2ecc71; font-weight:bold;'>🟢 Online</span>"
-                elif status == "Simulando":
-                    status_badge = f"<span style='color:#3498db; font-weight:bold;'>🔵 Simulando</span>"
-                else:
-                    status_badge = f"<span style='color:#e74c3c; font-weight:bold;' title='{err}'>🔴 Offline</span>"
-                
-                st.markdown(f"{name}: {status_badge}", unsafe_allow_html=True)
-                if err:
-                    st.caption(f"⚠️ `{err[:120]}`")
-
-    st.markdown("---")
-    
-    # System Diagnostic Logs Panel
-    st.subheader("📝 Bitácora del Sistema")
-    with st.container(height=300):
-        if not st.session_state.system_logs:
-            st.caption("No hay eventos registrados en la bitácora aún. Inicia el motor para ver trazas de depuración.")
-        else:
-            for log in st.session_state.system_logs:
-                st.markdown(log)
-                
-    if st.session_state.system_logs:
-        clean_logs = "\n".join([log.replace("⏱️ `", "[").replace("`", "]") for log in st.session_state.system_logs])
-        st.download_button(
-            label="💾 Descargar Bitácora Completa (.txt)",
-            data=clean_logs,
-            file_name=f"bitacora_sistema_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
-
-# --- AUTO-REFRESH TRIGGER ---
-# If monitoring is active or sending email, trigger page rerun after 2 seconds (or 1 second if sending) to poll the background thread queue and render updates
-if st.session_state.monitoring_active or st.session_state.get("smtp_sending", False):
-    interval = 1 if st.session_state.get("smtp_sending", False) else 2
-    time.sleep(interval)
-    st.rerun()
+    render_right_column()
