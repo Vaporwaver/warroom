@@ -4,7 +4,7 @@ import time
 import json
 import threading
 
-DB_PATH = os.path.join(os.getcwd(), "db.sqlite")
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db.sqlite")
 
 db_lock = threading.Lock()
 

@@ -93,7 +93,8 @@ def clean_ffmpeg_error(stderr_bytes):
 
 def get_ffmpeg_path():
     # 1. Check local workspace directory first (full-featured FFmpeg)
-    local_ffmpeg = os.path.join(os.getcwd(), "ffmpeg.exe")
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    local_ffmpeg = os.path.join(project_dir, "ffmpeg.exe")
     if os.path.exists(local_ffmpeg):
         return local_ffmpeg
         
@@ -269,7 +270,8 @@ class RadioScraper:
             found_kws = contains_keywords(text, self.keywords)
             if found_kws:
                 # Save audio to static directory
-                media_dir = os.path.join(os.getcwd(), "static")
+                project_dir = os.path.dirname(os.path.abspath(__file__))
+                media_dir = os.path.join(project_dir, "static")
                 os.makedirs(media_dir, exist_ok=True)
                 audio_filename = f"radio_{int(time.time())}.wav"
                 persistent_path = os.path.join(media_dir, audio_filename)
@@ -1175,7 +1177,8 @@ class TVScraper:
             found_kws = contains_keywords(text, self.keywords)
             if found_kws:
                 # Save video to static directory
-                media_dir = os.path.join(os.getcwd(), "static")
+                project_dir = os.path.dirname(os.path.abspath(__file__))
+                media_dir = os.path.join(project_dir, "static")
                 os.makedirs(media_dir, exist_ok=True)
                 video_filename = f"tv_{ts}.mp4"
                 persistent_path = os.path.join(media_dir, video_filename)
