@@ -1270,10 +1270,17 @@ if client_names:
             active_idx = idx
             break
     
-    selected_client_name = st.selectbox("👥 **Seleccione Cliente Activo:**", options=client_names, index=active_idx, help="Seleccione el cliente para visualizar sus alertas filtradas, métricas y reportes.")
+    selected_client_name = st.selectbox(
+        "👥 **Seleccione Cliente Activo:**",
+        options=client_names,
+        index=active_idx,
+        key="active_client_selectbox_val",
+        help="Seleccione el cliente para visualizar sus alertas filtradas, métricas y reportes."
+    )
     selected_client = next(c for c in clients if c["name"] == selected_client_name)
     if selected_client["id"] != st.session_state.active_client_id:
         st.session_state.active_client_id = selected_client["id"]
+        st.session_state.page_num = 1  # Reset page number to 1 when client changes
         st.session_state.should_reload = True
         st.session_state.should_reload_approved = True
         st.rerun()
@@ -1339,9 +1346,25 @@ with col_left:
         # Render filters
         if st.session_state.alerts:
             st.markdown("##### 🔍 Filtrar y Buscar Alertas")
+            
+            # Obtener todas las palabras clave únicas presentes en las alertas de la bandeja de validación
+            all_keywords = set()
+            for alert in st.session_state.alerts:
+                if alert.get("keywords"):
+                    for kw in alert["keywords"]:
+                        if kw.strip():
+                            all_keywords.add(kw.strip())
+            sorted_keywords = sorted(list(all_keywords))
+            
             col_f1, col_f2, col_f3, col_f4 = st.columns([0.35, 0.25, 0.22, 0.18])
             with col_f1:
-                search_query = st.text_input("Buscar por texto", value="", key="search_query_val", placeholder="Escribe palabras clave...")
+                selected_keywords = st.multiselect(
+                    "Palabras Clave",
+                    options=sorted_keywords,
+                    default=[],
+                    placeholder="Seleccionar...",
+                    key="selected_keywords_val"
+                )
             with col_f2:
                 selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "📰 RSS"], key="selected_media_val")
             with col_f3:
@@ -1369,10 +1392,12 @@ with col_left:
                 
             filtered_alerts = []
             for alert in st.session_state.alerts:
-                text_match = True
-                if search_query:
-                    q = search_query.lower()
-                    text_match = (q in alert["text"].lower()) or (q in alert["resumen"].lower()) or (q in alert["source"].lower())
+                keyword_match = True
+                if selected_keywords:
+                    # Comparar de forma insensible a mayúsculas/minúsculas y espacios
+                    alert_kws_set = {kw.lower().strip() for kw in alert.get("keywords", [])}
+                    selected_kws_set = {kw.lower().strip() for kw in selected_keywords}
+                    keyword_match = bool(alert_kws_set.intersection(selected_kws_set))
                 
                 source_match = alert["source"] in selected_sources
                 sentiment_match = alert["sentimiento"] in selected_sentiments
@@ -1392,7 +1417,7 @@ with col_left:
                     elif "RSS" in m_type and "rss" in source_lower:
                         media_type_match = True
                         
-                if text_match and source_match and sentiment_match and media_type_match:
+                if keyword_match and source_match and sentiment_match and media_type_match:
                     filtered_alerts.append(alert)
         else:
             filtered_alerts = []
@@ -1901,10 +1926,56 @@ with col_left:
                 default_keywords = target_client["keywords"]
                 default_desc = target_client["description"]
             
+            # Initialize temp keywords in session state if action changed or not present
+            current_action = selected_option
+            if "last_form_action" not in st.session_state or st.session_state.last_form_action != current_action or "temp_client_keywords" not in st.session_state:
+                if edit_mode and target_client:
+                    st.session_state.temp_client_keywords = [k.strip() for k in target_client["keywords"].split(",") if k.strip()]
+                else:
+                    st.session_state.temp_client_keywords = []
+                st.session_state.last_form_action = current_action
+
             # Form fields
             form_name = st.text_input("Nombre del Cliente", value=default_name, placeholder="Ej. Presidencia de la República")
             form_email = st.text_input("Correo(s) para Reportes (separados por comas)", value=default_email, placeholder="ejemplo1@correo.com, ejemplo2@correo.com")
-            form_keywords = st.text_input("Palabras Clave (separadas por comas)", value=default_keywords, placeholder="gobierno, presidente, reforma")
+            
+            # Tags-style input for keywords
+            st.markdown("<label style='font-size: 0.9rem; font-weight: bold;'>Palabras Clave de Monitoreo</label>", unsafe_allow_html=True)
+            col_kw_in, col_kw_btn = st.columns([0.75, 0.25])
+            with col_kw_in:
+                new_kw = st.text_input(
+                    "Añadir Palabra Clave",
+                    value="",
+                    placeholder="Escribe y presiona Enter...",
+                    label_visibility="collapsed",
+                    key="new_kw_input_field"
+                )
+            with col_kw_btn:
+                add_clicked = st.button("➕ Añadir", use_container_width=True, key="add_kw_btn")
+            
+            if new_kw.strip() or (add_clicked and st.session_state.get("new_kw_input_field", "").strip()):
+                kw_to_add = new_kw.strip() if new_kw.strip() else st.session_state.get("new_kw_input_field", "").strip()
+                # Separar por comas si por error meten comas
+                kws_split = [k.strip() for k in kw_to_add.split(",") if k.strip()]
+                for k in kws_split:
+                    if k not in st.session_state.temp_client_keywords:
+                        st.session_state.temp_client_keywords.append(k)
+                st.session_state.new_kw_input_field = ""
+                st.rerun()
+
+            # Mostrar palabras clave actuales como chips interactivos
+            if st.session_state.temp_client_keywords:
+                st.markdown("<p style='font-size:0.85rem; color:#a0a0a0; margin-bottom:5px;'>Haga clic en una palabra clave para eliminarla:</p>", unsafe_allow_html=True)
+                kw_cols = st.columns(4)
+                for idx, kw in enumerate(st.session_state.temp_client_keywords):
+                    col_idx = idx % 4
+                    with kw_cols[col_idx]:
+                        if st.button(f"❌ {kw}", key=f"del_kw_{idx}_{kw}", use_container_width=True):
+                            st.session_state.temp_client_keywords.remove(kw)
+                            st.rerun()
+            else:
+                st.info("💡 No hay palabras clave añadidas aún. Escribe arriba para agregar.")
+                
             form_desc = st.text_area("Descripción/Contexto para la IA", value=default_desc, placeholder="Contexto de negocio o marca, temas críticos a monitorear y tono sugerido para el análisis...")
             
             # Buttons
@@ -1914,7 +1985,7 @@ with col_left:
                 if st.button(submit_label, type="primary", use_container_width=True):
                     if not form_name.strip():
                         st.error("El nombre del cliente no puede estar vacío.")
-                    elif not form_keywords.strip():
+                    elif not st.session_state.temp_client_keywords:
                         st.error("Debe ingresar al menos una palabra clave de monitoreo.")
                     else:
                         client_id = target_client["id"] if edit_mode else None
@@ -1929,7 +2000,8 @@ with col_left:
                             if name_exists:
                                 st.error(f"❌ Ya existe un cliente con el nombre '{form_name.strip()}'. Si desea editar sus datos, selecciónelo en 'Seleccione una acción' arriba o pulse el botón '✏️ Editar Datos' de su tarjeta a la izquierda.")
                             else:
-                                database.save_client(client_id, form_name.strip(), form_email.strip(), form_keywords.strip(), form_desc.strip())
+                                form_keywords_str = ",".join(st.session_state.temp_client_keywords)
+                                database.save_client(client_id, form_name.strip(), form_email.strip(), form_keywords_str, form_desc.strip())
                                 st.success("✅ Cliente guardado con éxito.")
                                 st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
                                 st.rerun()
