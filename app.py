@@ -1935,6 +1935,20 @@ with col_left:
                     st.session_state.temp_client_keywords = []
                 st.session_state.last_form_action = current_action
 
+            # Callback to add keyword safely before widgets are instantiated on next run
+            def add_keyword_callback():
+                if "temp_client_keywords" not in st.session_state:
+                    st.session_state.temp_client_keywords = []
+                kw_raw = st.session_state.get("new_kw_input_field", "").strip()
+                if kw_raw:
+                    # Separar por comas si por error meten comas
+                    kws_split = [k.strip() for k in kw_raw.split(",") if k.strip()]
+                    for k in kws_split:
+                        if k not in st.session_state.temp_client_keywords:
+                            st.session_state.temp_client_keywords.append(k)
+                    # Clear input safely in the callback
+                    st.session_state.new_kw_input_field = ""
+
             # Form fields
             form_name = st.text_input("Nombre del Cliente", value=default_name, placeholder="Ej. Presidencia de la República")
             form_email = st.text_input("Correo(s) para Reportes (separados por comas)", value=default_email, placeholder="ejemplo1@correo.com, ejemplo2@correo.com")
@@ -1943,25 +1957,21 @@ with col_left:
             st.markdown("<label style='font-size: 0.9rem; font-weight: bold;'>Palabras Clave de Monitoreo</label>", unsafe_allow_html=True)
             col_kw_in, col_kw_btn = st.columns([0.75, 0.25])
             with col_kw_in:
-                new_kw = st.text_input(
+                st.text_input(
                     "Añadir Palabra Clave",
                     value="",
                     placeholder="Escribe y presiona Enter...",
                     label_visibility="collapsed",
-                    key="new_kw_input_field"
+                    key="new_kw_input_field",
+                    on_change=add_keyword_callback
                 )
             with col_kw_btn:
-                add_clicked = st.button("➕ Añadir", use_container_width=True, key="add_kw_btn")
-            
-            if new_kw.strip() or (add_clicked and st.session_state.get("new_kw_input_field", "").strip()):
-                kw_to_add = new_kw.strip() if new_kw.strip() else st.session_state.get("new_kw_input_field", "").strip()
-                # Separar por comas si por error meten comas
-                kws_split = [k.strip() for k in kw_to_add.split(",") if k.strip()]
-                for k in kws_split:
-                    if k not in st.session_state.temp_client_keywords:
-                        st.session_state.temp_client_keywords.append(k)
-                st.session_state.new_kw_input_field = ""
-                st.rerun()
+                st.button(
+                    "➕ Añadir", 
+                    use_container_width=True, 
+                    key="add_kw_btn",
+                    on_click=add_keyword_callback
+                )
 
             # Mostrar palabras clave actuales como chips interactivos
             if st.session_state.temp_client_keywords:
