@@ -414,13 +414,13 @@ class YouTubeScraper:
                     log(f"YouTube ({self.channel_name}) en enfriamiento. Siguiente escaneo en {cooldown_remaining}s.")
                     return []
             
-            log(f"Iniciando escaneo de YouTube ({self.channel_name}) (últimos 25 videos)...")
+            log(f"Iniciando escaneo de YouTube ({self.channel_name}) (hasta 2 semanas de antigüedad)...")
             
             # 1. Get channel videos list
             ydl_opts = {
                 'quiet': True,
                 'extract_flat': True,
-                'playlistend': 25,  # Fetch top 25 videos
+                'playlistend': 100,  # Fetch top 100 videos to cover up to 2 weeks
                 'no_warnings': True,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -484,9 +484,9 @@ class YouTubeScraper:
                     log(f"Error al verificar la antigüedad del video {video_id}: {e}")
                 
                 if is_too_old:
-                    log(f"El video {video_id} es mayor de 2 semanas. Marcándolo como procesado y omitiéndolo.")
+                    log(f"El video {video_id} es mayor de 2 semanas. Deteniendo escaneo del canal ya que el resto son más antiguos.")
                     database.mark_processed(video_id, f"youtube_{self.channel_name}", has_mention=False)
-                    continue
+                    break
                     
                 # Prevent CPU block/saturation in sequential loop (limit to 2 new videos per cycle)
                 if new_videos_scanned >= 2:
@@ -863,12 +863,29 @@ class InstagramScraper:
                     browser.close()
                     return mentions
                 
-                # Scroll down once to load the next batch of posts (total ~16)
-                try:
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    page.wait_for_timeout(3000) # Wait for requests to complete
-                except Exception:
-                    pass
+                # Scroll down dynamically until we have loaded posts older than 2 weeks (or max 5 scrolls)
+                max_scrolls = 5
+                for scroll in range(max_scrolls):
+                    # Check the oldest post timestamp we have so far
+                    oldest_timestamp = None
+                    for edge in profile_json.get("edges", []):
+                        node = edge.get("node", {})
+                        ts = node.get("taken_at_timestamp") or node.get("taken_at")
+                        if ts:
+                            ts = float(ts)
+                            if oldest_timestamp is None or ts < oldest_timestamp:
+                                oldest_timestamp = ts
+                                
+                    if oldest_timestamp and (time.time() - oldest_timestamp > 14 * 24 * 3600):
+                        log(f"Se cargaron posts de Instagram con fecha límite (antigüedad > 2 semanas). Deteniendo scroll.")
+                        break
+                        
+                    log(f"Haciendo scroll en Instagram (@{self.username}) para cargar posts más antiguos (scroll {scroll+1}/{max_scrolls})...")
+                    try:
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        page.wait_for_timeout(3000) # Wait for requests to complete
+                    except Exception:
+                        break
                 
                 mentions = []
                 scanned_count = 0
@@ -883,8 +900,8 @@ class InstagramScraper:
                         seen_shortcodes.add(shortcode)
                         unique_edges.append(edge)
                         
-                # Limit to latest 16 posts
-                media_edges = unique_edges[:16]
+                # No longer limit to 16 posts; process all unique edges loaded within 2 weeks
+                media_edges = unique_edges
                 
                 if media_edges:
                     log(f"API de Instagram interceptada. Procesando {len(media_edges)} posts...")
