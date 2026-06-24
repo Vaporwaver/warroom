@@ -451,9 +451,41 @@ class YouTubeScraper:
             mentions = []
             api = YouTubeTranscriptApi()
             new_videos_scanned = 0
+            age_checked_count = 0
             
             for video_id in video_ids:
                 if database.is_processed(video_id):
+                    continue
+                    
+                # Check video age (must be at most 2 weeks old)
+                # Limit the number of age checks to 5 per cycle to prevent rate limit/blocking
+                if age_checked_count >= 5:
+                    log(f"Límite de verificación de antigüedad (máx 5) alcanzado para YouTube ({self.channel_name}). El resto se verificará en el siguiente ciclo.")
+                    break
+                    
+                age_checked_count += 1
+                video_url = f"https://www.youtube.com/watch?v={video_id}"
+                is_too_old = False
+                try:
+                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+                        video_info = ydl.extract_info(video_url, download=False)
+                        ts = video_info.get('timestamp')
+                        if ts:
+                            if time.time() - float(ts) > 14 * 24 * 3600:
+                                is_too_old = True
+                        else:
+                            upload_date_str = video_info.get('upload_date')
+                            if upload_date_str:
+                                from datetime import datetime
+                                upload_dt = datetime.strptime(upload_date_str, "%Y%m%d")
+                                if time.time() - upload_dt.timestamp() > 14 * 24 * 3600:
+                                    is_too_old = True
+                except Exception as e:
+                    log(f"Error al verificar la antigüedad del video {video_id}: {e}")
+                
+                if is_too_old:
+                    log(f"El video {video_id} es mayor de 2 semanas. Marcándolo como procesado y omitiéndolo.")
+                    database.mark_processed(video_id, f"youtube_{self.channel_name}", has_mention=False)
                     continue
                     
                 # Prevent CPU block/saturation in sequential loop (limit to 2 new videos per cycle)
@@ -869,6 +901,11 @@ class InstagramScraper:
                             continue
                             
                         taken_at = node.get("taken_at_timestamp") or node.get("taken_at", 0)
+                        if taken_at > 0:
+                            if time.time() - float(taken_at) > 14 * 24 * 3600:
+                                log(f"El post de Instagram {shortcode} es mayor de 2 semanas. Marcándolo como procesado y omitiéndolo.")
+                                database.mark_processed(identifier, "instagram", has_mention=False)
+                                continue
                         scanned_count += 1
                         caption_text = ""
                         
@@ -1058,6 +1095,23 @@ class RSSScraper:
                 identifier = f"rss_{hashlib.md5(link.encode('utf-8')).hexdigest()[:12]}"
                 
                 if database.is_processed(identifier):
+                    continue
+                    
+                # Check RSS item age (must be at most 2 weeks old)
+                pubdate_elem = item.find('pubDate')
+                pubdate_text = pubdate_elem.text if pubdate_elem is not None else ""
+                is_too_old = False
+                if pubdate_text:
+                    try:
+                        import email.utils
+                        pub_dt = email.utils.parsedate_to_datetime(pubdate_text)
+                        if time.time() - pub_dt.timestamp() > 14 * 24 * 3600:
+                            is_too_old = True
+                    except Exception:
+                        pass
+                        
+                if is_too_old:
+                    database.mark_processed(identifier, f"rss_{self.feed_name}", has_mention=False)
                     continue
                     
                 scanned_count += 1
