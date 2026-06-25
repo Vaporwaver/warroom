@@ -16,29 +16,29 @@ import subprocess
 import tempfile
 import base64
 
-DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/n7rwu4qg5zhvv
+DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://radiordomi.com/8566/stream/1/
 CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
 Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
 Escándalo 102.5 | https://stream.zeno.fm/iwqlyzpyry1uv
 Estación 97.7 | https://stream2.rcast.net/61187
-Fidelity (94.1) | https://stream.fidelityfm.com.do/fidelity
+Fidelity (94.1) | https://autodiscover.fidelityfm.com.do/fid
 Independencia (93.3) | https://stream.radiojar.com/nc893hafc8zuv
 La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
-La Bakana (105.7) | https://stream.zeno.fm/0zt7qptffphvv
+La Bakana (105.7) | https://stream.zeno.fm/eym18zp7cyptv
 La Nota Diferente | https://tunein.com/radio/La-Nota-957-FM-s256372/
 La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
-La Voz FF.AA. (HIFA) | https://stream.zeno.fm/nus3bdqxi4qtv
+La Voz FF.AA. (HIFA) | https://rs2.radiordomi.com/8412/stream/1/
 La X 102.1 | https://audio.livecastnet.com:2535/stream
 La Z101 FM | https://streaming.z101digital.com/z101
-Latidos FM (93.7) | https://stream.zeno.fm/fr5uatdjvckuv
+Latidos FM (93.7) | https://rstream.hostdime.com/proxy/latidos?mp=/8880
 Los 40 (103.3) | https://stream.zeno.fm/sse58hcighnvv?dist=play
 Pura Vida (96.7) | https://stream.zeno.fm/veeugp2tz68uv
 Radio Monumental | http://radio2.grupointernet.com:8103/stream
 Ritmo 96.5 FM | https://stream-49.zeno.fm/y0br5ck4ququv
 Rumba FM | https://stream.zeno.fm/eticl2rpposvv
-Sentido 89.3 | https://stream.zeno.fm/gcw7xssprnruv
-Súper Q 100.9 | https://stream.zeno.fm/49lw5ggyujfvv
-Top Latina 101.7 | https://stream.zeno.fm/e6kpq5hgckatv
+Sentido 89.3 | https://stream.zeno.fm/vghmq0fffvftv
+Súper Q 100.9 | https://cast10.plugstreaming.com/stream/superq
+Top Latina 101.7 | https://stream.zeno.fm/rprhbqiwozovv
 Turbo 98 FM | https://stream.zeno.fm/s6c01714pa0uv
 Zol 106.5 FM | https://stream.zeno.fm/w6x7q7dtpy5tv"""
 
@@ -238,7 +238,8 @@ def get_lightweight_audio_uri(wav_path):
             b64 = base64.b64encode(data).decode("utf-8")
             return f"data:audio/wav;base64,{b64}"
             
-        temp_mp3 = os.path.join(tempfile.gettempdir(), f"temp_report_{int(time.time())}.mp3")
+        import uuid
+        temp_mp3 = os.path.join(tempfile.gettempdir(), f"temp_report_{uuid.uuid4().hex}.mp3")
         
         # Compress to 32kbps mono MP3 to make it extremely light (~80KB for 20s)
         cmd = [
@@ -648,17 +649,27 @@ st.sidebar.text_input(
     disabled=st.session_state.monitoring_active
 )
 
+# Load union of all active clients' keywords dynamically
+clients_db = database.get_all_clients()
+union_kws = set()
+for c in clients_db:
+    if c.get("enabled", 1) == 0:
+        continue
+    union_kws.update([k.strip() for k in c["keywords"].split(",") if k.strip()])
+union_kws_str = ", ".join(sorted(list(union_kws)))
+
+# Sync with running engine in-place if active
+if st.session_state.get("monitoring_active") and "engine" in st.session_state and st.session_state.engine:
+    new_kws_list = [k.strip() for k in union_kws_str.split(",") if k.strip()]
+    # Check if they are actually different to avoid unnecessary list operations
+    if sorted(st.session_state.engine.keywords) != sorted(new_kws_list):
+        st.session_state.engine.keywords.clear()
+        st.session_state.engine.keywords.extend(new_kws_list)
+        st.session_state.keywords_str = union_kws_str
+        st.session_state.keywords_input_state = union_kws_str
+
 # Text area for keywords and channels shown dynamically if not monitoring
 if not st.session_state.monitoring_active:
-    # Load union of all active clients' keywords
-    clients_db = database.get_all_clients()
-    union_kws = set()
-    for c in clients_db:
-        if c.get("enabled", 1) == 0:
-            continue
-        union_kws.update([k.strip() for k in c["keywords"].split(",") if k.strip()])
-    union_kws_str = ", ".join(sorted(list(union_kws)))
-    
     st.sidebar.text_input(
         "Palabras Clave Activas (Unificadas)",
         value=union_kws_str,
@@ -669,29 +680,29 @@ if not st.session_state.monitoring_active:
     st.session_state.keywords_input_state = union_kws_str
     st.session_state.keywords_str = union_kws_str
     
-    DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://stream.zeno.fm/n7rwu4qg5zhvv
+    DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://radiordomi.com/8566/stream/1/
 CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
 Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
 Escándalo 102.5 | https://stream.zeno.fm/iwqlyzpyry1uv
 Estación 97.7 | https://stream2.rcast.net/61187
-Fidelity (94.1) | https://stream.fidelityfm.com.do/fidelity
+Fidelity (94.1) | https://autodiscover.fidelityfm.com.do/fid
 Independencia (93.3) | https://stream.radiojar.com/nc893hafc8zuv
 La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
-La Bakana (105.7) | https://stream.zeno.fm/0zt7qptffphvv
+La Bakana (105.7) | https://stream.zeno.fm/eym18zp7cyptv
 La Nota Diferente | https://tunein.com/radio/La-Nota-957-FM-s256372/
 La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
-La Voz FF.AA. (HIFA) | https://stream.zeno.fm/nus3bdqxi4qtv
+La Voz FF.AA. (HIFA) | https://rs2.radiordomi.com/8412/stream/1/
 La X 102.1 | https://audio.livecastnet.com:2535/stream
 La Z101 FM | https://streaming.z101digital.com/z101
-Latidos FM (93.7) | https://stream.zeno.fm/fr5uatdjvckuv
+Latidos FM (93.7) | https://rstream.hostdime.com/proxy/latidos?mp=/8880
 Los 40 (103.3) | https://stream.zeno.fm/sse58hcighnvv?dist=play
 Pura Vida (96.7) | https://stream.zeno.fm/veeugp2tz68uv
 Radio Monumental | http://radio2.grupointernet.com:8103/stream
 Ritmo 96.5 FM | https://stream-49.zeno.fm/y0br5ck4ququv
 Rumba FM | https://stream.zeno.fm/eticl2rpposvv
-Sentido 89.3 | https://stream.zeno.fm/gcw7xssprnruv
-Súper Q 100.9 | https://stream.zeno.fm/49lw5ggyujfvv
-Top Latina 101.7 | https://stream.zeno.fm/e6kpq5hgckatv
+Sentido 89.3 | https://stream.zeno.fm/vghmq0fffvftv
+Súper Q 100.9 | https://cast10.plugstreaming.com/stream/superq
+Top Latina 101.7 | https://stream.zeno.fm/rprhbqiwozovv
 Turbo 98 FM | https://stream.zeno.fm/s6c01714pa0uv
 Zol 106.5 FM | https://stream.zeno.fm/w6x7q7dtpy5tv"""
 
@@ -975,7 +986,7 @@ else:
                         public_url, 
                         headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
                     )
-                    with urllib.request.urlopen(req, timeout=15) as response:
+                    with urllib.request.urlopen(req, timeout=45) as response:
                         zip_data = response.read()
                 except Exception:
                     # 2. If public fails, fall back to authenticated token download
@@ -988,7 +999,7 @@ else:
                                 'Authorization': f'Bearer {github_token_val}'
                             }
                         )
-                        with urllib.request.urlopen(req, timeout=20) as response:
+                        with urllib.request.urlopen(req, timeout=45) as response:
                             zip_data = response.read()
                     else:
                         raise Exception("El repositorio es privado o inaccesible. Configure un GitHub Token en la barra lateral o use la opción manual subiendo el archivo ZIP.")
@@ -1231,6 +1242,17 @@ def render_right_column():
                     status_badge = f"<span style='color:#e74c3c; font-weight:bold;' title='{err}'>🔴 Offline</span>"
                 
                 st.markdown(f"{name}: {status_badge}", unsafe_allow_html=True)
+                if status in ("Online", "Simulando"):
+                    url = info.get("url")
+                    media_type = info.get("type")
+                    if url:
+                        clean_name = name.replace("📻 Radio (", "").replace("📺 TV (", "").replace(")", "")
+                        if media_type == "Radio":
+                            with st.expander(f"🔊 Escuchar {clean_name}"):
+                                st.audio(url)
+                        elif media_type == "TV":
+                            with st.expander(f"📺 Ver {clean_name}"):
+                                st.video(url)
                 if err:
                     st.caption(f"⚠️ `{err[:120]}`")
 

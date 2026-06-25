@@ -55,6 +55,18 @@ def extract_youtube_channel_name(url):
         return parts[-1]
     return "YouTube"
 
+def normalize_youtube_channel_url(url):
+    if not url:
+        return ""
+    url = url.strip()
+    if url.startswith("http://") or url.startswith("https://") or url.startswith("www."):
+        return url
+    if url.startswith("@"):
+        return f"https://www.youtube.com/{url}"
+    if url.startswith("UC"):
+        return f"https://www.youtube.com/channel/{url}"
+    return f"https://www.youtube.com/@{url}"
+
 def extract_rss_domain(url):
     if not url:
         return "RSS"
@@ -264,6 +276,7 @@ class RadioScraper:
                 'quiet': True,
                 'no_warnings': True,
                 'skip_download': True,
+                'socket_timeout': 45,
             }
             stream_url = self.tunein_url
             try:
@@ -281,8 +294,9 @@ class RadioScraper:
             if not ffmpeg_bin:
                 raise FileNotFoundError("ffmpeg not found in PATH or Playwright cache")
                 
+            import uuid
             temp_dir = tempfile.gettempdir()
-            temp_audio = os.path.join(temp_dir, f"radio_temp_{int(time.time())}.wav")
+            temp_audio = os.path.join(temp_dir, f"radio_temp_{uuid.uuid4().hex}.wav")
             
             cmd = [ffmpeg_bin, "-y"]
             headers_str = ""
@@ -319,7 +333,7 @@ class RadioScraper:
             # 3. Transcribe with Whisper
             model = get_whisper_model(self.whisper_model_name)
             with _whisper_transcription_lock:
-                transcription = model.transcribe(temp_audio, language="es")
+                transcription = model.transcribe(temp_audio, language="es", fp16=(model.device.type == "cuda"))
             text = transcription.get("text", "")
             
             # 4. Keyword Match
@@ -390,9 +404,9 @@ class RadioScraper:
 # --- YouTube Scraper ---
 class YouTubeScraper:
     def __init__(self, channel_url, keywords):
-        self.channel_url = channel_url
+        self.channel_url = normalize_youtube_channel_url(channel_url)
         self.keywords = keywords
-        self.channel_name = extract_youtube_channel_name(channel_url)
+        self.channel_name = extract_youtube_channel_name(self.channel_url)
 
     def scrape(self, engine=None):
         def log(msg):
@@ -422,6 +436,7 @@ class YouTubeScraper:
                 'extract_flat': True,
                 'playlistend': 100,  # Fetch top 100 videos to cover up to 2 weeks
                 'no_warnings': True,
+                'socket_timeout': 45,
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.channel_url, download=False)
@@ -467,7 +482,7 @@ class YouTubeScraper:
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
                 is_too_old = False
                 try:
-                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True}) as ydl:
+                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 45}) as ydl:
                         video_info = ydl.extract_info(video_url, download=False)
                         ts = video_info.get('timestamp')
                         if ts:
@@ -579,6 +594,7 @@ class YouTubeScraper:
                             'quiet': True,
                             'no_warnings': True,
                             'max_filesize': 30 * 1024 * 1024, # Limit to 30MB max
+                            'socket_timeout': 45,
                         }
                         
                         video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -617,7 +633,7 @@ class YouTubeScraper:
                         model_name = engine.whisper_model if (engine and hasattr(engine, 'whisper_model')) else "tiny"
                         model = get_whisper_model(model_name)
                         with _whisper_transcription_lock:
-                            transcription = model.transcribe(wav_audio_path, language="es")
+                            transcription = model.transcribe(wav_audio_path, language="es", fp16=(model.device.type == "cuda"))
                         full_text = transcription.get("text", "")
                         
                         # 4. Search keywords and build context using Whisper segment timestamps
@@ -1079,7 +1095,7 @@ class RSSScraper:
                 self.feed_url, 
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
             )
-            with urllib.request.urlopen(req, timeout=10.0) as response:
+            with urllib.request.urlopen(req, timeout=45.0) as response:
                 xml_data = response.read()
                 
             # Clean XML string to avoid strict parsing issues
@@ -1216,6 +1232,7 @@ class TVScraper:
                 'quiet': True,
                 'no_warnings': True,
                 'skip_download': True,
+                'socket_timeout': 45,
             }
             is_youtube = "youtube.com" in self.stream_url or "youtu.be" in self.stream_url
             resolved_url = None
@@ -1252,10 +1269,11 @@ class TVScraper:
             if not ffmpeg_bin:
                 raise FileNotFoundError("ffmpeg not found in PATH or Playwright cache")
                 
+            import uuid
             temp_dir = tempfile.gettempdir()
-            ts = int(time.time())
-            temp_video = os.path.join(temp_dir, f"tv_temp_{ts}.mp4")
-            temp_audio = os.path.join(temp_dir, f"tv_temp_{ts}.wav")
+            unique_id = uuid.uuid4().hex
+            temp_video = os.path.join(temp_dir, f"tv_temp_{unique_id}.mp4")
+            temp_audio = os.path.join(temp_dir, f"tv_temp_{unique_id}.wav")
             
             # Record video (MP4) from live stream for duration seconds
             cmd_video = [ffmpeg_bin, "-y"]
@@ -1293,7 +1311,7 @@ class TVScraper:
             # 3. Transcribe with Whisper
             model = get_whisper_model(self.whisper_model_name)
             with _whisper_transcription_lock:
-                transcription = model.transcribe(temp_audio, language="es")
+                transcription = model.transcribe(temp_audio, language="es", fp16=(model.device.type == "cuda"))
             text = transcription.get("text", "")
             
             if os.path.exists(temp_audio):
@@ -1537,7 +1555,7 @@ class MonitoringEngine:
         self.uptime_status = {}
         
         self.radio_channels = radio_channels or []
-        self.youtube_channels = youtube_channels or []
+        self.youtube_channels = [normalize_youtube_channel_url(yt) for yt in youtube_channels if yt.strip()] if youtube_channels else []
         self.instagram_channels = instagram_channels or []
         self.rss_feeds = rss_feeds or []
         self.tv_channels = tv_channels or []
@@ -1670,16 +1688,26 @@ class MonitoringEngine:
                             mentions = future.result()
                             if mentions:
                                 self._process_mentions(mentions)
+                            cls_name = scraper.__class__.__name__
+                            url = getattr(scraper, "tunein_url", None) or getattr(scraper, "stream_url", None)
+                            media_type = "Radio" if cls_name == "RadioScraper" else ("TV" if cls_name == "TVScraper" else "Other")
                             self.uptime_status[name] = {
                                 "status": "Simulando" if self.force_simulation else "Online",
                                 "last_checked": time.time(),
-                                "error": ""
+                                "error": "",
+                                "url": url,
+                                "type": media_type
                             }
                         except Exception as exc:
+                            cls_name = scraper.__class__.__name__
+                            url = getattr(scraper, "tunein_url", None) or getattr(scraper, "stream_url", None)
+                            media_type = "Radio" if cls_name == "RadioScraper" else ("TV" if cls_name == "TVScraper" else "Other")
                             self.uptime_status[name] = {
                                 "status": "Offline",
                                 "last_checked": time.time(),
-                                "error": str(exc)
+                                "error": str(exc),
+                                "url": url,
+                                "type": media_type
                             }
                             ffmpeg_bin = get_ffmpeg_path()
                             self.log_event(f"Error ejecutando scraper {name}: {exc} (ffmpeg: `{ffmpeg_bin}`)")
