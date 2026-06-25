@@ -426,13 +426,13 @@ class YouTubeScraper:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.channel_url, download=False)
                 entries = info.get('entries', [])
-                video_ids = [entry['id'] for entry in entries if entry.get('id')]
+                video_ids = [entry['id'] for entry in entries if entry.get('id') and len(entry['id']) == 11]
                 
                 # Build map of video_id -> title
                 video_map = {}
                 for entry in entries:
                     v_id = entry.get('id')
-                    if v_id:
+                    if v_id and len(v_id) == 11:
                         video_map[v_id] = entry.get('title') or "Video de YouTube"
                 
             if not video_ids:
