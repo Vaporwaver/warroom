@@ -323,11 +323,21 @@ def get_processed_counts():
     cursor.execute("SELECT COUNT(*) FROM processed_content WHERE source LIKE 'youtube_%'")
     yt_count = cursor.fetchone()[0]
     
+    # Twitter count
+    cursor.execute("SELECT COUNT(*) FROM processed_content WHERE source = 'twitter'")
+    tw_count = cursor.fetchone()[0]
+    
+    # Facebook count
+    cursor.execute("SELECT COUNT(*) FROM processed_content WHERE source = 'facebook'")
+    fb_count = cursor.fetchone()[0]
+    
     conn.close()
     return {
         "instagram": ig_count,
         "rss": rss_count,
-        "youtube": yt_count
+        "youtube": yt_count,
+        "twitter": tw_count,
+        "facebook": fb_count
     }
 
 # --- Clients CRUD functions ---

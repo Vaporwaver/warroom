@@ -1071,6 +1071,383 @@ class InstagramScraper:
         }]
 
 
+# --- Twitter (X) Scraper ---
+class TwitterScraper:
+    def __init__(self, username, keywords, auth_token=None):
+        self.username = username
+        self.keywords = keywords
+        self.auth_token = auth_token
+
+    def scrape(self, engine=None):
+        def log(msg):
+            if engine and hasattr(engine, "log_event"):
+                engine.log_event(msg)
+                
+        try:
+            from playwright.sync_api import sync_playwright
+            from playwright_stealth import Stealth
+            
+            log(f"Iniciando escaneo de Twitter (@{self.username})...")
+            
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    viewport={"width": 1280, "height": 800}
+                )
+                page = context.new_page()
+                Stealth().apply_stealth_sync(page)
+                
+                # Add Twitter auth_token cookie if provided to bypass login walls
+                if self.auth_token:
+                    context.add_cookies([{
+                        'name': 'auth_token',
+                        'value': self.auth_token,
+                        'domain': '.x.com',
+                        'path': '/'
+                    }, {
+                        'name': 'auth_token',
+                        'value': self.auth_token,
+                        'domain': '.twitter.com',
+                        'path': '/'
+                    }])
+                
+                url = f"https://x.com/{self.username}"
+                page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                page.wait_for_timeout(3000) # Give extra time for React rendering
+                
+                # Check for login redirection
+                if "/login" in page.url.lower():
+                    log(f"Twitter redirigió al muro de inicio de sesión. Asegúrate de configurar un 'auth_token' válido.")
+                    browser.close()
+                    return []
+                
+                # Scroll down slightly (1 scroll) to trigger page load
+                try:
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
+                    page.wait_for_timeout(2000)
+                except Exception:
+                    pass
+
+                # Extract tweets
+                tweets = page.evaluate("""
+                    () => {
+                        const results = [];
+                        const tweetElements = document.querySelectorAll('article[data-testid="tweet"]');
+                        for (const el of tweetElements) {
+                            // Text of the tweet
+                            const textEl = el.querySelector('[data-testid="tweetText"]');
+                            const text = textEl ? textEl.innerText : '';
+                            
+                            // Link/status URL and datetime
+                            const links = el.querySelectorAll('a');
+                            let tweetUrl = '';
+                            for (const a of links) {
+                                const href = a.getAttribute('href') || '';
+                                if (href.includes('/status/')) {
+                                    tweetUrl = 'https://x.com' + href;
+                                    break;
+                                }
+                            }
+                            
+                            const timeEl = el.querySelector('time');
+                            const datetime = timeEl ? timeEl.getAttribute('datetime') : '';
+                            
+                            results.push({ text, url: tweetUrl, datetime });
+                        }
+                        return results;
+                    }
+                """)
+                
+                mentions = []
+                scanned_count = 0
+                
+                log(f"Se encontraron {len(tweets)} tuits en el feed de @{self.username}.")
+                for tw in tweets:
+                    tweet_text = tw["text"]
+                    tweet_url = tw["url"]
+                    datetime_str = tw["datetime"]
+                    
+                    if not tweet_text or not tweet_url:
+                        continue
+                    
+                    # Extract unique tweet status ID
+                    tweet_id = None
+                    parts = tweet_url.split("/status/")
+                    if len(parts) > 1:
+                        tweet_id = parts[1].split("?")[0].strip()
+                    
+                    if not tweet_id:
+                        tweet_id = hashlib.md5(tweet_url.encode()).hexdigest()
+                        
+                    identifier = f"tw_{tweet_id}"
+                    
+                    if database.is_processed(identifier):
+                        continue
+                        
+                    # Parse timestamp if datetime exists
+                    taken_at = 0
+                    if datetime_str:
+                        try:
+                            import datetime as dt
+                            clean_dt = datetime_str.split(".")[0].replace("Z", "")
+                            parsed_dt = dt.datetime.strptime(clean_dt, "%Y-%m-%dT%H:%M:%S")
+                            taken_at = parsed_dt.replace(tzinfo=dt.timezone.utc).timestamp()
+                        except Exception:
+                            taken_at = 0
+                    
+                    # Skip tweets older than 2 weeks
+                    if taken_at > 0 and (time.time() - taken_at > 14 * 24 * 3600):
+                        log(f"El tuit {tweet_id} es mayor de 2 semanas. Marcándolo como procesado y omitiéndolo.")
+                        database.mark_processed(identifier, "twitter", has_mention=False)
+                        continue
+                    
+                    scanned_count += 1
+                    found_kws = contains_keywords(tweet_text, self.keywords)
+                    has_mention = len(found_kws) > 0
+                    database.mark_processed(identifier, "twitter", has_mention=has_mention)
+                    
+                    if found_kws:
+                        mentions.append({
+                            "source": f"Twitter (@{self.username})",
+                            "text": tweet_text.strip(),
+                            "keywords": found_kws,
+                            "timestamp": taken_at if taken_at > 0 else time.time(),
+                            "identifier": identifier,
+                            "simulated": False,
+                            "metadata": {
+                                "post_url": tweet_url
+                            }
+                        })
+                
+                log(f"Escaneo de Twitter (@{self.username}) completado. {scanned_count} tuits analizados.")
+                browser.close()
+                return mentions
+        except Exception as e:
+            log(f"Error raspando Twitter en vivo: {str(e)}")
+            return []
+
+    def get_simulated_mention(self, diagnostic_msg=None):
+        if random.random() > 0.3:
+            return []
+            
+        templates = [
+            "🚨 ÚLTIMA HORA: Se reporta un fuerte incendio en la Zona Industrial de Herrera. Los bomberos ya están en el lugar intentando sofocar las llamas. Se pide precaución. #NoticiasRD #SomosPueblo",
+            "📊 Encuesta: ¿Qué opina la población sobre la nueva propuesta de reforma fiscal del gobierno? La clase media teme el impacto en el costo de la vida. #Opinión #SomosPuebloRD",
+            "📢 Ciudadanos denuncian en redes sociales la falta de patrullaje policial en sectores de Santo Domingo Este tras ola de asaltos. Exigen respuesta de las autoridades.",
+            "⚠️ Atención: El COE coloca varias provincias en alerta verde por la incidencia de una vaguada que generará lluvias moderadas en las próximas horas. #ClimaRD #COE",
+            "💰 Denuncia: Se destapan supuestas irregularidades en la compra de insumos de una entidad pública. Exigen investigación de las autoridades. #SomosPueblo"
+        ]
+        text = random.choice(templates)
+        found_kws = contains_keywords(text, self.keywords)
+        
+        return [{
+            "source": f"Twitter (@{self.username})",
+            "text": text,
+            "keywords": found_kws,
+            "timestamp": time.time(),
+            "identifier": f"tw_sim_{int(time.time())}",
+            "simulated": True,
+            "diagnostic": diagnostic_msg,
+            "metadata": {
+                "post_url": f"https://x.com/{self.username}"
+            }
+        }]
+
+
+# --- Facebook Scraper ---
+class FacebookScraper:
+    def __init__(self, username, keywords, cookies_str=None):
+        self.username = username
+        self.keywords = keywords
+        self.cookies_str = cookies_str
+
+    def scrape(self, engine=None):
+        def log(msg):
+            if engine and hasattr(engine, "log_event"):
+                engine.log_event(msg)
+                
+        try:
+            from playwright.sync_api import sync_playwright
+            from playwright_stealth import Stealth
+            
+            log(f"Iniciando escaneo de Facebook ({self.username})...")
+            
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    viewport={"width": 1280, "height": 800}
+                )
+                page = context.new_page()
+                Stealth().apply_stealth_sync(page)
+                
+                # Add Facebook cookies if provided to bypass login walls
+                if self.cookies_str:
+                    try:
+                        cookies_list = json.loads(self.cookies_str)
+                        if isinstance(cookies_list, list):
+                            for cookie in cookies_list:
+                                if 'domain' not in cookie:
+                                    cookie['domain'] = '.facebook.com'
+                                context.add_cookies([cookie])
+                        else:
+                            raise ValueError()
+                    except Exception:
+                        # Parse as key-value semicolon-separated
+                        parts = self.cookies_str.split(";")
+                        cookies_to_add = []
+                        for part in parts:
+                            part = part.strip()
+                            if "=" in part:
+                                name, val = part.split("=", 1)
+                                cookies_to_add.append({
+                                    'name': name.strip(),
+                                    'value': val.strip(),
+                                    'domain': '.facebook.com',
+                                    'path': '/'
+                                })
+                        if cookies_to_add:
+                            context.add_cookies(cookies_to_add)
+                
+                url = f"https://www.facebook.com/{self.username}"
+                page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                page.wait_for_timeout(3000) # Give extra time for rendering
+                
+                # Check for login redirect or banner
+                if "login" in page.url.lower() and not self.cookies_str:
+                    log("Facebook redirigió a la página de login. Se requieren cookies para continuar.")
+                    browser.close()
+                    return []
+                
+                # Scroll down slightly (1 scroll) to trigger page load
+                try:
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
+                    page.wait_for_timeout(2000)
+                except Exception:
+                    pass
+
+                # Extract posts
+                posts = page.evaluate("""
+                    () => {
+                        const results = [];
+                        const articles = document.querySelectorAll('div[role="article"]');
+                        for (const el of articles) {
+                            let text = '';
+                            const msgEl = el.querySelector('div[data-ad-preview="message"]');
+                            if (msgEl) {
+                                text = msgEl.innerText;
+                            } else {
+                                const dirs = el.querySelectorAll('div[dir="auto"]');
+                                let textParts = [];
+                                for (const d of dirs) {
+                                    const val = d.innerText.trim();
+                                    if (val.length > 20) {
+                                        textParts.push(val);
+                                    }
+                                }
+                                text = textParts.join('\\n');
+                            }
+                            
+                            // Find link
+                            const links = el.querySelectorAll('a');
+                            let postUrl = '';
+                            for (const a of links) {
+                                const href = a.getAttribute('href') || '';
+                                if (href.includes('/posts/') || href.includes('/permalink.php') || href.includes('/photos/') || href.includes('/story.php')) {
+                                    if (href.startsWith('/')) {
+                                        postUrl = 'https://www.facebook.com' + href;
+                                    } else if (href.startsWith('https://')) {
+                                        postUrl = href;
+                                    }
+                                    if (postUrl) {
+                                        postUrl = postUrl.split('?')[0];
+                                        break;
+                                    }
+                                }
+                            }
+                            results.push({ text, url: postUrl });
+                        }
+                        return results;
+                    }
+                """)
+                
+                mentions = []
+                scanned_count = 0
+                
+                log(f"Se encontraron {len(posts)} publicaciones en Facebook para {self.username}.")
+                for pt in posts:
+                    post_text = pt["text"]
+                    post_url = pt["url"]
+                    
+                    if not post_text:
+                        continue
+                    
+                    # Generate a unique identifier
+                    if post_url:
+                        h = hashlib.md5(post_url.encode()).hexdigest()
+                    else:
+                        h = hashlib.md5(post_text.encode()).hexdigest()
+                        post_url = f"https://www.facebook.com/{self.username}"
+                        
+                    identifier = f"fb_{h}"
+                    
+                    if database.is_processed(identifier):
+                        continue
+                    
+                    scanned_count += 1
+                    found_kws = contains_keywords(post_text, self.keywords)
+                    has_mention = len(found_kws) > 0
+                    database.mark_processed(identifier, "facebook", has_mention=has_mention)
+                    
+                    if found_kws:
+                        mentions.append({
+                            "source": f"Facebook ({self.username})",
+                            "text": post_text.strip(),
+                            "keywords": found_kws,
+                            "timestamp": time.time(),
+                            "identifier": identifier,
+                            "simulated": False,
+                            "metadata": {
+                                "post_url": post_url
+                            }
+                        })
+                
+                log(f"Escaneo de Facebook ({self.username}) completado. {scanned_count} posts analizados.")
+                browser.close()
+                return mentions
+        except Exception as e:
+            log(f"Error raspando Facebook en vivo: {str(e)}")
+            return []
+
+    def get_simulated_mention(self, diagnostic_msg=None):
+        if random.random() > 0.3:
+            return []
+            
+        templates = [
+            "🔴 EN VIVO: Conversando con líderes comunitarios sobre los problemas de agua y electricidad en el municipio. Déjanos tus preguntas en los comentarios y comparte esta transmisión.",
+            "📝 EDITORIAL: La necesidad de una verdadera transparencia legislativa. No basta con discursos, se necesitan hechos y auditorías reales de cada peso invertido en nuestro país.",
+            "📸 Reportan vertedero improvisado afectando la salud de decenas de familias en Los Alcarrizos. Hacemos un llamado a la alcaldía para resolver esta preocupante situación de inmediato.",
+            "🤝 Hoy estuvimos acompañando a los jóvenes del sector en su torneo de baloncesto, apoyando el deporte y alejándolos de los vicios. ¡El cambio comienza desde los barrios!",
+            "🚨 ALERTA: Estafadores están utilizando perfiles falsos para ofrecer empleos en nombre de nuestra organización. Recuerda que no solicitamos dinero para postularte."
+        ]
+        text = random.choice(templates)
+        found_kws = contains_keywords(text, self.keywords)
+        
+        return [{
+            "source": f"Facebook ({self.username})",
+            "text": text,
+            "keywords": found_kws,
+            "timestamp": time.time(),
+            "identifier": f"fb_sim_{int(time.time())}",
+            "simulated": True,
+            "diagnostic": diagnostic_msg,
+            "metadata": {
+                "post_url": f"https://www.facebook.com/{self.username}"
+            }
+        }]
+
+
 # --- RSS Feed Scraper ---
 class RSSScraper:
     def __init__(self, feed_url, keywords):
@@ -1519,6 +1896,10 @@ def get_scraper_display_name(scraper):
         return f"🎥 YouTube ({name})"
     elif cls_name == "InstagramScraper":
         return f"📸 Instagram (@{scraper.username})"
+    elif cls_name == "TwitterScraper":
+        return f"🐦 Twitter (@{scraper.username})"
+    elif cls_name == "FacebookScraper":
+        return f"📘 Facebook ({scraper.username})"
     elif cls_name == "RSSScraper":
         return f"📰 RSS ({scraper.feed_name})"
     return str(scraper)
@@ -1545,32 +1926,24 @@ def clean_html_text(raw_html):
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, twitter_channels=None, facebook_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
         self.whisper_model = whisper_model
         self.ollama_model = ollama_model
         self.instagram_sessionid = instagram_sessionid
+        self.twitter_authtoken = twitter_authtoken
+        self.facebook_cookies = facebook_cookies
         self.uptime_status = {}
         
-        self.radio_channels = radio_channels or []
-        self.youtube_channels = [normalize_youtube_channel_url(yt) for yt in youtube_channels if yt.strip()] if youtube_channels else []
-        self.instagram_channels = instagram_channels or []
-        self.rss_feeds = rss_feeds or []
-        self.tv_channels = tv_channels or []
-        
-        # Fallbacks to defaults if everything is empty
-        if not self.radio_channels:
-            self.radio_channels = [{"name": "Z101", "url": "https://tunein.com/radio/Z101FM-1013-s102394/"}]
-        if not self.youtube_channels:
-            self.youtube_channels = ["https://www.youtube.com/@nuriapiera/videos"]
-        if not self.instagram_channels:
-            self.instagram_channels = ["nuriapiera"]
-        if not self.rss_feeds:
-            self.rss_feeds = ["https://somospueblo.com/feed/"]
-        if not self.tv_channels:
-            self.tv_channels = [{"name": "CDN 37", "url": "https://www.youtube.com/watch?v=h34A93R1g3E"}]
+        self.radio_channels = radio_channels if radio_channels is not None else [{"name": "Z101", "url": "https://tunein.com/radio/Z101FM-1013-s102394/"}]
+        self.youtube_channels = [normalize_youtube_channel_url(yt) for yt in youtube_channels if yt.strip()] if youtube_channels is not None else ["https://www.youtube.com/@nuriapiera/videos"]
+        self.instagram_channels = instagram_channels if instagram_channels is not None else ["nuriapiera"]
+        self.twitter_channels = twitter_channels if twitter_channels is not None else ["somospueblord"]
+        self.facebook_channels = facebook_channels if facebook_channels is not None else ["somospueblord"]
+        self.rss_feeds = rss_feeds if rss_feeds is not None else ["https://somospueblo.com/feed/"]
+        self.tv_channels = tv_channels if tv_channels is not None else [{"name": "CDN 37", "url": "https://www.youtube.com/watch?v=h34A93R1g3E"}]
         
         self.alerts_queue = queue.Queue()
         self.logs_queue = queue.Queue()
@@ -1590,6 +1963,10 @@ class MonitoringEngine:
             self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords))
         for ig in self.instagram_channels:
             self.scrapers.append(InstagramScraper(username=ig, keywords=self.keywords, sessionid=self.instagram_sessionid))
+        for tw in self.twitter_channels:
+            self.scrapers.append(TwitterScraper(username=tw, keywords=self.keywords, auth_token=self.twitter_authtoken))
+        for fb in self.facebook_channels:
+            self.scrapers.append(FacebookScraper(username=fb, keywords=self.keywords, cookies_str=self.facebook_cookies))
         for rss in self.rss_feeds:
             self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:
@@ -1657,6 +2034,10 @@ class MonitoringEngine:
                     scraper.whisper_model_name = self.whisper_model
                 elif cls_name == "InstagramScraper":
                     scraper.sessionid = self.instagram_sessionid
+                elif cls_name == "TwitterScraper":
+                    scraper.auth_token = self.twitter_authtoken
+                elif cls_name == "FacebookScraper":
+                    scraper.cookies_str = self.facebook_cookies
             self.analyzer.model_name = self.ollama_model
             
             num_workers = min(3, len(self.scrapers))
@@ -1676,7 +2057,7 @@ class MonitoringEngine:
                             cls_name = scraper.__class__.__name__
                             if cls_name == "YouTubeScraper":
                                 futures[executor.submit(scraper.scrape, self)] = scraper
-                            elif cls_name in ("RSSScraper", "InstagramScraper"):
+                            elif cls_name in ("RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper"):
                                 futures[executor.submit(scraper.scrape, self)] = scraper
                             elif cls_name in ("RadioScraper", "TVScraper"):
                                 futures[executor.submit(scraper.scrape)] = scraper

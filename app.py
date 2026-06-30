@@ -16,6 +16,78 @@ import subprocess
 import tempfile
 import base64
 
+def detect_social_cookies():
+    try:
+        import rookiepy
+    except ImportError:
+        return {
+            'instagram': None,
+            'twitter': None,
+            'facebook': None,
+            'browsers_checked': []
+        }
+    
+    browsers = [
+        ('Chrome', rookiepy.chrome),
+        ('Edge', rookiepy.edge),
+        ('Firefox', rookiepy.firefox),
+        ('Brave', rookiepy.brave),
+        ('Opera', rookiepy.opera),
+        ('Vivaldi', rookiepy.vivaldi)
+    ]
+    
+    results = {
+        'instagram': None,
+        'twitter': None,
+        'facebook': None,
+        'browsers_checked': []
+    }
+    
+    for name, func in browsers:
+        try:
+            results['browsers_checked'].append(name)
+            
+            # 1. Instagram
+            if not results['instagram']:
+                try:
+                    ig_cookies = func(domains=['.instagram.com', 'instagram.com'])
+                    for c in ig_cookies:
+                        if c.get('name') == 'sessionid':
+                            results['instagram'] = (c.get('value'), name)
+                            break
+                except Exception:
+                    pass
+                        
+            # 2. Twitter (X)
+            if not results['twitter']:
+                try:
+                    tw_cookies = func(domains=['.twitter.com', 'twitter.com', '.x.com', 'x.com'])
+                    for c in tw_cookies:
+                        if c.get('name') == 'auth_token':
+                            results['twitter'] = (c.get('value'), name)
+                            break
+                except Exception:
+                    pass
+                        
+            # 3. Facebook
+            if not results['facebook']:
+                try:
+                    fb_cookies = func(domains=['.facebook.com', 'facebook.com'])
+                    fb_parts = []
+                    for c in fb_cookies:
+                        name_str = c.get('name')
+                        val_str = c.get('value')
+                        if name_str and val_str:
+                            fb_parts.append(f"{name_str}={val_str}")
+                    if fb_parts:
+                        results['facebook'] = ("; ".join(fb_parts), name)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+            
+    return results
+
 DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://radiordomi.com/8566/stream/1/
 CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
 Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
@@ -503,11 +575,28 @@ if "youtube_channels_val" not in st.session_state:
     st.session_state["youtube_channels_val"] = database.get_state("config_youtube_channels", "https://www.youtube.com/@nuriapiera/videos")
 if "instagram_users_val" not in st.session_state:
     st.session_state["instagram_users_val"] = database.get_state("config_instagram_users", "nuriapiera")
+if "twitter_users_val" not in st.session_state:
+    st.session_state["twitter_users_val"] = database.get_state("config_twitter_users", "somospueblord")
+if "facebook_users_val" not in st.session_state:
+    st.session_state["facebook_users_val"] = database.get_state("config_facebook_users", "somospueblord")
+if "twitter_authtoken_val" not in st.session_state:
+    st.session_state["twitter_authtoken_val"] = database.get_state("config_twitter_authtoken", "")
+if "facebook_cookies_val" not in st.session_state:
+    st.session_state["facebook_cookies_val"] = database.get_state("config_facebook_cookies", "")
 if "rss_feeds_val" not in st.session_state:
     st.session_state["rss_feeds_val"] = database.get_state("config_rss_feeds", DEFAULT_RSS_FEEDS)
 
+# Initialize persistent active media switches
+for m_key in ["media_radio_active", "media_tv_active", "media_youtube_active", "media_instagram_active", "media_twitter_active", "media_facebook_active", "media_rss_active"]:
+    if m_key not in st.session_state:
+        st.session_state[m_key] = (database.get_state(f"config_{m_key}", "true") == "true")
+
 def save_config(key, db_key):
     val = st.session_state.get(key, "")
+    database.set_state(db_key, val)
+
+def save_bool_config(key, db_key):
+    val = "true" if st.session_state.get(key, True) else "false"
     database.set_state(db_key, val)
 
 # --- SIDEBAR: Configuration & Control ---
@@ -517,57 +606,96 @@ else:
     st.sidebar.image("https://img.icons8.com/nolan/128/war.png", width=80)
 st.sidebar.markdown("<h2 style='margin-top:0;'>Centro de Control</h2>", unsafe_allow_html=True)
 
+# Media Source Toggle switches
+st.sidebar.markdown("### 📡 Fuentes de Monitoreo")
+col_m1, col_m2 = st.sidebar.columns(2)
+with col_m1:
+    st.toggle("📻 Radio", key="media_radio_active", on_change=save_bool_config, args=("media_radio_active", "config_media_radio_active"), disabled=st.session_state.monitoring_active)
+    st.toggle("🎥 YouTube", key="media_youtube_active", on_change=save_bool_config, args=("media_youtube_active", "config_media_youtube_active"), disabled=st.session_state.monitoring_active)
+    st.toggle("🐦 Twitter", key="media_twitter_active", on_change=save_bool_config, args=("media_twitter_active", "config_media_twitter_active"), disabled=st.session_state.monitoring_active)
+    st.toggle("📰 RSS", key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active)
+with col_m2:
+    st.toggle("📺 TV", key="media_tv_active", on_change=save_bool_config, args=("media_tv_active", "config_media_tv_active"), disabled=st.session_state.monitoring_active)
+    st.toggle("📸 Instagram", key="media_instagram_active", on_change=save_bool_config, args=("media_instagram_active", "config_media_instagram_active"), disabled=st.session_state.monitoring_active)
+    st.toggle("📘 Facebook", key="media_facebook_active", on_change=save_bool_config, args=("media_facebook_active", "config_media_facebook_active"), disabled=st.session_state.monitoring_active)
+
+st.sidebar.markdown("---")
+
 # Main Engine Controls
 if not st.session_state.monitoring_active:
-    if st.sidebar.button("🚀 INICIAR MONITOREO", use_container_width=True, type="primary"):
+    any_active = any(st.session_state.get(k, True) for k in ["media_radio_active", "media_tv_active", "media_youtube_active", "media_instagram_active", "media_twitter_active", "media_facebook_active", "media_rss_active"])
+    if not any_active:
+        st.sidebar.warning("⚠️ Selecciona al menos una fuente de monitoreo.")
+        
+    if st.sidebar.button("🚀 INICIAR MONITOREO", use_container_width=True, type="primary", disabled=not any_active):
         # Parse keywords from the visible text input in the configuration section
         kws_str = st.session_state.get("keywords_input_state", "")
         st.session_state.keywords_str = kws_str
         kws = [k.strip() for k in kws_str.split(",") if k.strip()]
         
         # Parse Radio channels
-        radio_lines = st.session_state.get("radio_channels_val", "").split("\n")
         radio_list = []
-        for line in radio_lines:
-            line = line.strip()
-            if not line:
-                continue
-            if "|" in line:
-                parts = line.split("|", 1)
-                name = parts[0].strip()
-                url = parts[1].strip()
-            else:
-                name = "Radio"
-                url = line
-            radio_list.append({"name": name, "url": url})
+        if st.session_state.get("media_radio_active", True):
+            radio_lines = st.session_state.get("radio_channels_val", "").split("\n")
+            for line in radio_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if "|" in line:
+                    parts = line.split("|", 1)
+                    name = parts[0].strip()
+                    url = parts[1].strip()
+                else:
+                    name = "Radio"
+                    url = line
+                radio_list.append({"name": name, "url": url})
             
         # Parse TV channels
-        tv_lines = st.session_state.get("tv_channels_val", "").split("\n")
         tv_list = []
-        for line in tv_lines:
-            line = line.strip()
-            if not line:
-                continue
-            if "|" in line:
-                parts = line.split("|", 1)
-                name = parts[0].strip()
-                url = parts[1].strip()
-            else:
-                name = "TV"
-                url = line
-            tv_list.append({"name": name, "url": url})
+        if st.session_state.get("media_tv_active", True):
+            tv_lines = st.session_state.get("tv_channels_val", "").split("\n")
+            for line in tv_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if "|" in line:
+                    parts = line.split("|", 1)
+                    name = parts[0].strip()
+                    url = parts[1].strip()
+                else:
+                    name = "TV"
+                    url = line
+                tv_list.append({"name": name, "url": url})
             
         # Parse YouTube channels
-        yt_lines = st.session_state.get("youtube_channels_val", "").split("\n")
-        youtube_list = [line.strip() for line in yt_lines if line.strip()]
+        youtube_list = []
+        if st.session_state.get("media_youtube_active", True):
+            yt_lines = st.session_state.get("youtube_channels_val", "").split("\n")
+            youtube_list = [line.strip() for line in yt_lines if line.strip()]
         
         # Parse Instagram usernames
-        ig_lines = st.session_state.get("instagram_users_val", "").split("\n")
-        instagram_list = [line.strip() for line in ig_lines if line.strip()]
+        instagram_list = []
+        if st.session_state.get("media_instagram_active", True):
+            ig_lines = st.session_state.get("instagram_users_val", "").split("\n")
+            instagram_list = [line.strip() for line in ig_lines if line.strip()]
+        
+        # Parse Twitter usernames
+        twitter_list = []
+        if st.session_state.get("media_twitter_active", True):
+            tw_lines = st.session_state.get("twitter_users_val", "").split("\n")
+            twitter_list = [line.strip() for line in tw_lines if line.strip()]
+        
+        # Parse Facebook usernames/pages
+        facebook_list = []
+        if st.session_state.get("media_facebook_active", True):
+            fb_lines = st.session_state.get("facebook_users_val", "").split("\n")
+            facebook_list = [line.strip() for line in fb_lines if line.strip()]
         
         # Parse RSS feeds
-        rss_lines = st.session_state.get("rss_feeds_val", "").split("\n")
-        rss_list = [line.strip() for line in rss_lines if line.strip()]
+        rss_list = []
+        if st.session_state.get("media_rss_active", True):
+            rss_lines = st.session_state.get("rss_feeds_val", "").split("\n")
+            rss_list = [line.strip() for line in rss_lines if line.strip()]
         
         # Instantiate and run engine
         st.session_state.engine = scrapers.MonitoringEngine(
@@ -575,13 +703,17 @@ if not st.session_state.monitoring_active:
             radio_channels=radio_list,
             youtube_channels=youtube_list,
             instagram_channels=instagram_list,
+            twitter_channels=twitter_list,
+            facebook_channels=facebook_list,
             rss_feeds=rss_list,
             tv_channels=tv_list,
             scan_interval=st.session_state.get("scan_interval_val", 30),
             force_simulation=st.session_state.force_simulation,
             whisper_model=st.session_state.get("whisper_model_val", "tiny"),
             ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
-            instagram_sessionid=st.session_state.get("instagram_sessionid_val", "")
+            instagram_sessionid=st.session_state.get("instagram_sessionid_val", ""),
+            twitter_authtoken=st.session_state.get("twitter_authtoken_val", ""),
+            facebook_cookies=st.session_state.get("facebook_cookies_val", "")
         )
         st.session_state.engine.start()
         st.session_state.monitoring_active = True
@@ -641,11 +773,57 @@ st.sidebar.selectbox(
     help="Modelo local de Ollama cargado a través de localhost:11434"
 )
 
+# Button to autodetect cookies
+if not st.session_state.monitoring_active:
+    if st.sidebar.button("🔌 Autodetectar Cookies de Redes", use_container_width=True, help="Intenta extraer automáticamente las cookies de sesión para Instagram, Twitter y Facebook de los navegadores locales."):
+        with st.sidebar.spinner("Detectando cookies..."):
+            cookie_data = detect_social_cookies()
+            detected_any = False
+            msg_success = []
+            
+            if cookie_data.get('instagram'):
+                st.session_state.instagram_sessionid_val = cookie_data['instagram'][0]
+                msg_success.append(f"Instagram ({cookie_data['instagram'][1]})")
+                detected_any = True
+                
+            if cookie_data.get('twitter'):
+                st.session_state.twitter_authtoken_val = cookie_data['twitter'][0]
+                msg_success.append(f"Twitter ({cookie_data['twitter'][1]})")
+                detected_any = True
+                
+            if cookie_data.get('facebook'):
+                st.session_state.facebook_cookies_val = cookie_data['facebook'][0]
+                msg_success.append(f"Facebook ({cookie_data['facebook'][1]})")
+                detected_any = True
+                
+            if detected_any:
+                success_list = ", ".join(msg_success)
+                st.sidebar.success(f"✅ Cookies cargadas: {success_list}")
+            else:
+                st.sidebar.error("❌ No se detectaron cookies de sesión activas.")
+                st.sidebar.info("💡 Nota: En Chrome/Edge v130+, Google bloquea el acceso de aplicaciones de terceros a menos que se ejecuten como Administrador.")
+
 st.sidebar.text_input(
     "Instagram sessionid (Cookie)",
     type="password",
     key="instagram_sessionid_val",
     help="Opcional. Si deseas hacer scraping real de Instagram sin ser bloqueado, ingresa tu cookie 'sessionid'.",
+    disabled=st.session_state.monitoring_active
+)
+
+st.sidebar.text_input(
+    "Twitter auth_token (Cookie)",
+    type="password",
+    key="twitter_authtoken_val",
+    help="Opcional. Si deseas hacer scraping real de Twitter (X), ingresa tu cookie 'auth_token'.",
+    disabled=st.session_state.monitoring_active
+)
+
+st.sidebar.text_input(
+    "Facebook cookies (Cookie header)",
+    type="password",
+    key="facebook_cookies_val",
+    help="Opcional. Si deseas hacer scraping real de Facebook, ingresa tus cookies.",
     disabled=st.session_state.monitoring_active
 )
 
@@ -752,41 +930,62 @@ https://noticiassin.com/feed/
 https://deultimominuto.net/feed/
 https://eldinero.com.do/feed/"""
 
-    st.sidebar.text_area(
-        "Emisoras de Radio (Nombre | URL)",
-        key="radio_channels_val",
-        on_change=save_config,
-        args=("radio_channels_val", "config_radio_channels"),
-        help="Ingresa Nombre | URL de streaming de audio por línea."
-    )
-    st.sidebar.text_area(
-        "Canales de TV (Nombre | URL)",
-        key="tv_channels_val",
-        on_change=save_config,
-        args=("tv_channels_val", "config_tv_channels"),
-        help="Ingresa Nombre | URL de streaming de video por línea."
-    )
-    st.sidebar.text_area(
-        "Canales de YouTube (URLs)",
-        key="youtube_channels_val",
-        on_change=save_config,
-        args=("youtube_channels_val", "config_youtube_channels"),
-        help="Ingresa una URL de canal por línea."
-    )
-    st.sidebar.text_area(
-        "Usuarios de Instagram",
-        key="instagram_users_val",
-        on_change=save_config,
-        args=("instagram_users_val", "config_instagram_users"),
-        help="Ingresa un usuario por línea (sin @)."
-    )
-    st.sidebar.text_area(
-        "Feeds RSS (URLs)",
-        key="rss_feeds_val",
-        on_change=save_config,
-        args=("rss_feeds_val", "config_rss_feeds"),
-        help="Ingresa una URL de feed RSS por línea."
-    )
+    if st.session_state.get("media_radio_active", True):
+        st.sidebar.text_area(
+            "Emisoras de Radio (Nombre | URL)",
+            key="radio_channels_val",
+            on_change=save_config,
+            args=("radio_channels_val", "config_radio_channels"),
+            help="Ingresa Nombre | URL de streaming de audio por línea."
+        )
+    if st.session_state.get("media_tv_active", True):
+        st.sidebar.text_area(
+            "Canales de TV (Nombre | URL)",
+            key="tv_channels_val",
+            on_change=save_config,
+            args=("tv_channels_val", "config_tv_channels"),
+            help="Ingresa Nombre | URL de streaming de video por línea."
+        )
+    if st.session_state.get("media_youtube_active", True):
+        st.sidebar.text_area(
+            "Canales de YouTube (URLs)",
+            key="youtube_channels_val",
+            on_change=save_config,
+            args=("youtube_channels_val", "config_youtube_channels"),
+            help="Ingresa una URL de canal por línea."
+        )
+    if st.session_state.get("media_instagram_active", True):
+        st.sidebar.text_area(
+            "Usuarios de Instagram",
+            key="instagram_users_val",
+            on_change=save_config,
+            args=("instagram_users_val", "config_instagram_users"),
+            help="Ingresa un usuario por línea (sin @)."
+        )
+    if st.session_state.get("media_twitter_active", True):
+        st.sidebar.text_area(
+            "Cuentas de Twitter (X)",
+            key="twitter_users_val",
+            on_change=save_config,
+            args=("twitter_users_val", "config_twitter_users"),
+            help="Ingresa una cuenta de Twitter por línea (sin @)."
+        )
+    if st.session_state.get("media_facebook_active", True):
+        st.sidebar.text_area(
+            "Páginas/Perfiles de Facebook",
+            key="facebook_users_val",
+            on_change=save_config,
+            args=("facebook_users_val", "config_facebook_users"),
+            help="Ingresa una página o perfil de Facebook por línea."
+        )
+    if st.session_state.get("media_rss_active", True):
+        st.sidebar.text_area(
+            "Feeds RSS (URLs)",
+            key="rss_feeds_val",
+            on_change=save_config,
+            args=("rss_feeds_val", "config_rss_feeds"),
+            help="Ingresa una URL de feed RSS por línea."
+        )
 else:
     st.sidebar.info(f"🔍 **Buscando:** `{st.session_state.get('keywords_str', '')}`")
     
@@ -794,20 +993,36 @@ else:
     engine = st.session_state.get("engine")
     if engine:
         st.sidebar.markdown("**Canales Activos:**")
-        r_names = [f"📻 {r['name']}" for r in engine.radio_channels]
-        st.sidebar.caption(" / ".join(r_names))
+        if engine.radio_channels:
+            r_names = [f"📻 {r['name']}" for r in engine.radio_channels]
+            st.sidebar.caption(" / ".join(r_names))
         
-        tv_names = [f"📺 {tv['name']}" for tv in getattr(engine, "tv_channels", [])]
-        st.sidebar.caption(" / ".join(tv_names))
-        
-        yt_names = [f"🎥 {scrapers.extract_youtube_channel_name(url)}" for url in engine.youtube_channels]
-        st.sidebar.caption(" / ".join(yt_names))
-        
-        ig_names = [f"📸 @{user}" for user in engine.instagram_channels]
-        st.sidebar.caption(" / ".join(ig_names))
-        
-        rss_names = [f"📰 {scrapers.extract_rss_domain(url)}" for url in engine.rss_feeds]
-        st.sidebar.caption(" / ".join(rss_names))
+        tv_ch = getattr(engine, "tv_channels", [])
+        if tv_ch:
+            tv_names = [f"📺 {tv['name']}" for tv in tv_ch]
+            st.sidebar.caption(" / ".join(tv_names))
+            
+        if engine.youtube_channels:
+            yt_names = [f"🎥 {scrapers.extract_youtube_channel_name(url)}" for url in engine.youtube_channels]
+            st.sidebar.caption(" / ".join(yt_names))
+            
+        if engine.instagram_channels:
+            ig_names = [f"📸 @{user}" for user in engine.instagram_channels]
+            st.sidebar.caption(" / ".join(ig_names))
+            
+        tw_ch = getattr(engine, "twitter_channels", [])
+        if tw_ch:
+            tw_names = [f"🐦 @{user}" for user in tw_ch]
+            st.sidebar.caption(" / ".join(tw_names))
+            
+        fb_ch = getattr(engine, "facebook_channels", [])
+        if fb_ch:
+            fb_names = [f"📘 {user}" for user in fb_ch]
+            st.sidebar.caption(" / ".join(fb_names))
+            
+        if engine.rss_feeds:
+            rss_names = [f"📰 {scrapers.extract_rss_domain(url)}" for url in engine.rss_feeds]
+            st.sidebar.caption(" / ".join(rss_names))
 
 st.sidebar.markdown("---")
 
@@ -1186,16 +1401,20 @@ def render_right_column():
     # 3. Render the metrics and logs in col_right
     st.subheader("📊 Métricas de Medios")
     
-    # Contador de noticias/contenido verificado (Instagram, RSS, YouTube)
+    # Contador de noticias/contenido verificado (Instagram, RSS, YouTube, Twitter, Facebook)
     processed_counts = database.get_processed_counts()
     st.markdown("##### 🔍 Contenido Verificado (Escaneado)")
-    col_v1, col_v2, col_v3 = st.columns(3)
+    col_v1, col_v2, col_v3, col_v4, col_v5 = st.columns(5)
     with col_v1:
         st.metric(label="📸 Instagram", value=processed_counts["instagram"])
     with col_v2:
         st.metric(label="📰 RSS", value=processed_counts["rss"])
     with col_v3:
         st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
+    with col_v4:
+        st.metric(label="🐦 Twitter", value=processed_counts.get("twitter", 0))
+    with col_v5:
+        st.metric(label="📘 Facebook", value=processed_counts.get("facebook", 0))
     
     st.markdown("---")
     
@@ -1205,6 +1424,8 @@ def render_right_column():
     tv_cnt = sum(1 for s in sources if "TV" in s)
     yt_cnt = sum(1 for s in sources if "YouTube" in s)
     ig_cnt = sum(1 for s in sources if "Instagram" in s)
+    tw_cnt = sum(1 for s in sources if "Twitter" in s)
+    fb_cnt = sum(1 for s in sources if "Facebook" in s)
     rss_cnt = sum(1 for s in sources if "RSS" in s)
     
     total_m = len(st.session_state.alerts)
@@ -1217,6 +1438,8 @@ def render_right_column():
     st.progress(tv_cnt / total_m if total_m > 0 else 0.0, text=f"📺 TV ({tv_cnt})")
     st.progress(yt_cnt / total_m if total_m > 0 else 0.0, text=f"🎥 YouTube ({yt_cnt})")
     st.progress(ig_cnt / total_m if total_m > 0 else 0.0, text=f"📸 Instagram ({ig_cnt})")
+    st.progress(tw_cnt / total_m if total_m > 0 else 0.0, text=f"🐦 Twitter ({tw_cnt})")
+    st.progress(fb_cnt / total_m if total_m > 0 else 0.0, text=f"📘 Facebook ({fb_cnt})")
     st.progress(rss_cnt / total_m if total_m > 0 else 0.0, text=f"📰 RSS ({rss_cnt})")
     
     st.markdown("---")
@@ -1388,7 +1611,7 @@ with col_left:
                     key="selected_keywords_val"
                 )
             with col_f2:
-                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "📰 RSS"], key="selected_media_val")
+                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], key="selected_media_val")
             with col_f3:
                 # Find all sources in the alerts cache
                 all_sources = list(set([a["source"] for a in st.session_state.alerts]))
@@ -1404,6 +1627,10 @@ with col_left:
                         elif "YouTube" in m_type and "youtube" in src_lower:
                             matching_sources.append(src)
                         elif "Instagram" in m_type and "instagram" in src_lower:
+                            matching_sources.append(src)
+                        elif "Twitter" in m_type and "twitter" in src_lower:
+                            matching_sources.append(src)
+                        elif "Facebook" in m_type and "facebook" in src_lower:
                             matching_sources.append(src)
                         elif "RSS" in m_type and "rss" in src_lower:
                             matching_sources.append(src)
@@ -1435,6 +1662,10 @@ with col_left:
                     elif "YouTube" in m_type and "youtube" in source_lower:
                         media_type_match = True
                     elif "Instagram" in m_type and "instagram" in source_lower:
+                        media_type_match = True
+                    elif "Twitter" in m_type and "twitter" in source_lower:
+                        media_type_match = True
+                    elif "Facebook" in m_type and "facebook" in source_lower:
                         media_type_match = True
                     elif "RSS" in m_type and "rss" in source_lower:
                         media_type_match = True
@@ -1484,6 +1715,8 @@ with col_left:
                 if "radio" in source_lower: source_icon = "📻"
                 elif "tv" in source_lower: source_icon = "📺"
                 elif "youtube" in source_lower: source_icon = "🎥"
+                elif "twitter" in source_lower: source_icon = "🐦"
+                elif "facebook" in source_lower: source_icon = "📘"
                 elif "rss" in source_lower: source_icon = "📰"
                 else: source_icon = "📸"
                 
@@ -1563,6 +1796,16 @@ with col_left:
                             post_url = metadata.get("post_url")
                             if post_url:
                                 st.link_button("📸 Ver Publicación en Instagram", post_url)
+                                
+                        elif "twitter" in source_lower:
+                            post_url = metadata.get("post_url")
+                            if post_url:
+                                st.link_button("🐦 Ver Publicación en Twitter (X)", post_url)
+                                
+                        elif "facebook" in source_lower:
+                            post_url = metadata.get("post_url")
+                            if post_url:
+                                st.link_button("📘 Ver Publicación en Facebook", post_url)
                                 
                         # Render RSS specific details and external link button
                         elif "rss" in source_lower:
@@ -1727,6 +1970,8 @@ with col_left:
             app_tv = sum(1 for s in app_sources if "TV" in s)
             app_yt = sum(1 for s in app_sources if "YouTube" in s)
             app_ig = sum(1 for s in app_sources if "Instagram" in s)
+            app_tw = sum(1 for s in app_sources if "Twitter" in s)
+            app_fb = sum(1 for s in app_sources if "Facebook" in s)
             app_rss = sum(1 for s in app_sources if "RSS" in s)
 
             # 1. Compile Markdown
@@ -1745,6 +1990,8 @@ with col_left:
             report_md += f"- **📺 TV:** {app_tv} menciones\n"
             report_md += f"- **🎥 YouTube:** {app_yt} menciones\n"
             report_md += f"- **📸 Instagram:** {app_ig} menciones\n"
+            report_md += f"- **🐦 Twitter:** {app_tw} menciones\n"
+            report_md += f"- **📘 Facebook:** {app_fb} menciones\n"
             report_md += f"- **📰 RSS:** {app_rss} menciones\n\n"
             report_md += "---\n\n"
             
@@ -1753,7 +2000,14 @@ with col_left:
                 
             report_md += "## 📋 DETALLE DE MENCIONES ENCONTRADAS\n\n"
             for a in st.session_state.approved_alerts:
-                source_icon = "📻" if "radio" in a["source"].lower() else ("📺" if "tv" in a["source"].lower() else ("🎥" if "youtube" in a["source"].lower() else ("📰" if "rss" in a["source"].lower() else "📸")))
+                source_lower_rpt = a["source"].lower()
+                if "radio" in source_lower_rpt: source_icon = "📻"
+                elif "tv" in source_lower_rpt: source_icon = "📺"
+                elif "youtube" in source_lower_rpt: source_icon = "🎥"
+                elif "twitter" in source_lower_rpt: source_icon = "🐦"
+                elif "facebook" in source_lower_rpt: source_icon = "📘"
+                elif "rss" in source_lower_rpt: source_icon = "📰"
+                else: source_icon = "📸"
                 formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%I:%M %p")
                 sentiment_str = "🟢 Positivo" if a["sentimiento"] == "Positivo" else ("🔴 Negativo" if a["sentimiento"] == "Negativo" else "🔵 Neutral")
                 

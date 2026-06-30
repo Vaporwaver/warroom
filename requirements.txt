@@ -6,3 +6,4 @@ youtube-transcript-api>=0.6.2
 playwright>=1.44.0
 playwright-stealth>=1.0.6
 ollama>=0.2.1
+rookiepy>=0.5.6
