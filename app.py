@@ -16,78 +16,6 @@ import subprocess
 import tempfile
 import base64
 
-def detect_social_cookies():
-    try:
-        import rookiepy
-    except ImportError:
-        return {
-            'instagram': None,
-            'twitter': None,
-            'facebook': None,
-            'browsers_checked': []
-        }
-    
-    browsers = [
-        ('Chrome', rookiepy.chrome),
-        ('Edge', rookiepy.edge),
-        ('Firefox', rookiepy.firefox),
-        ('Brave', rookiepy.brave),
-        ('Opera', rookiepy.opera),
-        ('Vivaldi', rookiepy.vivaldi)
-    ]
-    
-    results = {
-        'instagram': None,
-        'twitter': None,
-        'facebook': None,
-        'browsers_checked': []
-    }
-    
-    for name, func in browsers:
-        try:
-            results['browsers_checked'].append(name)
-            
-            # 1. Instagram
-            if not results['instagram']:
-                try:
-                    ig_cookies = func(domains=['.instagram.com', 'instagram.com'])
-                    for c in ig_cookies:
-                        if c.get('name') == 'sessionid':
-                            results['instagram'] = (c.get('value'), name)
-                            break
-                except Exception:
-                    pass
-                        
-            # 2. Twitter (X)
-            if not results['twitter']:
-                try:
-                    tw_cookies = func(domains=['.twitter.com', 'twitter.com', '.x.com', 'x.com'])
-                    for c in tw_cookies:
-                        if c.get('name') == 'auth_token':
-                            results['twitter'] = (c.get('value'), name)
-                            break
-                except Exception:
-                    pass
-                        
-            # 3. Facebook
-            if not results['facebook']:
-                try:
-                    fb_cookies = func(domains=['.facebook.com', 'facebook.com'])
-                    fb_parts = []
-                    for c in fb_cookies:
-                        name_str = c.get('name')
-                        val_str = c.get('value')
-                        if name_str and val_str:
-                            fb_parts.append(f"{name_str}={val_str}")
-                    if fb_parts:
-                        results['facebook'] = ("; ".join(fb_parts), name)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-            
-    return results
-
 DEFAULT_RADIO_CHANNELS = """Alofoke FM (99.3) | https://radiordomi.com/8566/stream/1/
 CDN Radio (92.5) | https://play.cdnradio.com.do/cdnlive
 Dale 101.9 | https://stream.zeno.fm/2h6plesly3nvv
@@ -772,36 +700,6 @@ st.sidebar.selectbox(
     disabled=st.session_state.monitoring_active,
     help="Modelo local de Ollama cargado a través de localhost:11434"
 )
-
-# Button to autodetect cookies
-if not st.session_state.monitoring_active:
-    if st.sidebar.button("🔌 Autodetectar Cookies de Redes", use_container_width=True, help="Intenta extraer automáticamente las cookies de sesión para Instagram, Twitter y Facebook de los navegadores locales."):
-        with st.sidebar.spinner("Detectando cookies..."):
-            cookie_data = detect_social_cookies()
-            detected_any = False
-            msg_success = []
-            
-            if cookie_data.get('instagram'):
-                st.session_state.instagram_sessionid_val = cookie_data['instagram'][0]
-                msg_success.append(f"Instagram ({cookie_data['instagram'][1]})")
-                detected_any = True
-                
-            if cookie_data.get('twitter'):
-                st.session_state.twitter_authtoken_val = cookie_data['twitter'][0]
-                msg_success.append(f"Twitter ({cookie_data['twitter'][1]})")
-                detected_any = True
-                
-            if cookie_data.get('facebook'):
-                st.session_state.facebook_cookies_val = cookie_data['facebook'][0]
-                msg_success.append(f"Facebook ({cookie_data['facebook'][1]})")
-                detected_any = True
-                
-            if detected_any:
-                success_list = ", ".join(msg_success)
-                st.sidebar.success(f"✅ Cookies cargadas: {success_list}")
-            else:
-                st.sidebar.error("❌ No se detectaron cookies de sesión activas.")
-                st.sidebar.info("💡 Nota: En Chrome/Edge v130+, Google bloquea el acceso de aplicaciones de terceros a menos que se ejecuten como Administrador.")
 
 st.sidebar.text_input(
     "Instagram sessionid (Cookie)",
