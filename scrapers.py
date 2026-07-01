@@ -26,14 +26,65 @@ def normalize_text(text):
         if unicodedata.category(c) != 'Mn'
     ).lower()
 
-def contains_keywords(text, keywords):
+def evaluate_boolean_query(expression, text):
+    """
+    Evaluates a boolean search query against a given text.
+    Supports AND, OR, NOT, parentheses, and terms/phrases.
+    """
     norm_text = normalize_text(text)
-    found = []
-    for kw in keywords:
-        norm_kw = normalize_text(kw)
-        if norm_kw in norm_text:
-            found.append(kw)
-    return found
+    
+    # Tokenize the expression
+    # Operators: AND, OR, NOT, (, )
+    # Terms can be alphanumeric or include special chars like # or @, or quoted phrases.
+    token_pattern = re.compile(r'\(|\)|AND|OR|NOT|"[^"]+"|[^\s()]+', re.IGNORECASE)
+    tokens = token_pattern.findall(expression)
+    
+    processed_tokens = []
+    terms_matched = []
+    
+    for token in tokens:
+        upper_token = token.upper()
+        if upper_token in ('AND', 'OR', 'NOT', '(', ')'):
+            processed_tokens.append(upper_token.lower())
+        else:
+            term = token.strip('"')
+            norm_term = normalize_text(term)
+            
+            # Custom word boundary matching
+            # Matches term only when bounded by start/end of string or non-alphanumeric chars
+            pattern = rf"(?:^|[^a-zA-Z0-9_]){re.escape(norm_term)}(?:$|[^a-zA-Z0-9_])"
+            has_match = re.search(pattern, norm_text) is not None
+            
+            if has_match:
+                processed_tokens.append("True")
+                terms_matched.append(term)
+            else:
+                processed_tokens.append("False")
+                
+    expr_str = " ".join(processed_tokens)
+    
+    # Strict validation to prevent arbitrary execution
+    allowed_words = {'and', 'or', 'not', 'true', 'false', '(', ')'}
+    words = expr_str.replace('(', ' ( ').replace(')', ' ) ').split()
+    for w in words:
+        if w.lower() not in allowed_words:
+            return False, []
+            
+    try:
+        result = bool(eval(expr_str, {"__builtins__": None}, {}))
+        return result, terms_matched
+    except Exception:
+        return False, []
+
+def contains_keywords(text, keywords):
+    found = set()
+    any_matched = False
+    for expr in keywords:
+        matched, terms = evaluate_boolean_query(expr, text)
+        if matched:
+            any_matched = True
+            found.update(terms)
+    return list(found) if any_matched else []
 
 from urllib.parse import urlparse
 
