@@ -22,3 +22,7 @@ static/
 
 # Zips
 *.zip
+
+# Google Cloud credentials
+google_vision_creds.json
+
