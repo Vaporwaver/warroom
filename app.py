@@ -299,6 +299,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Load Font Awesome CSS globally
+st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">', unsafe_allow_html=True)
+
 # Premium Custom CSS Styles
 st.markdown("""
 <style>
@@ -536,10 +539,10 @@ if os.path.exists("assets/logo.png"):
     st.sidebar.image("assets/logo.png", use_container_width=True)
 else:
     st.sidebar.image("https://img.icons8.com/nolan/128/war.png", width=80)
-st.sidebar.markdown("<h2 style='margin-top:0;'>Centro de Control</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='margin-top:0; display: flex; align-items: center; gap: 10px;'><i class='fa-solid fa-sliders'></i> Centro de Control</h2>", unsafe_allow_html=True)
 
 # Media Source Toggle switches
-st.sidebar.markdown("### 📡 Fuentes de Monitoreo")
+st.sidebar.markdown("### <i class='fa-solid fa-tower-broadcast'></i> Fuentes de Monitoreo", unsafe_allow_html=True)
 col_m1, col_m2 = st.sidebar.columns(2)
 with col_m1:
     st.toggle("📻 Radio", key="media_radio_active", on_change=save_bool_config, args=("media_radio_active", "config_media_radio_active"), disabled=st.session_state.monitoring_active)
@@ -1497,7 +1500,7 @@ with col_left:
     with tab_validation:
         # Render filters
         if st.session_state.alerts:
-            st.markdown("##### 🔍 Filtrar y Buscar Alertas")
+            st.markdown("##### <i class='fa-solid fa-filter'></i> Filtrar y Buscar Alertas", unsafe_allow_html=True)
             
             # Obtener todas las palabras clave únicas presentes en las alertas de la bandeja de validación
             all_keywords = set()
@@ -1619,13 +1622,14 @@ with col_left:
             for idx, alert in enumerate(page_alerts):
                 # Select icon
                 source_lower = alert["source"].lower()
-                if "radio" in source_lower: source_icon = "📻"
-                elif "tv" in source_lower: source_icon = "📺"
-                elif "youtube" in source_lower: source_icon = "🎥"
-                elif "twitter" in source_lower: source_icon = "🐦"
-                elif "facebook" in source_lower: source_icon = "📘"
-                elif "rss" in source_lower: source_icon = "📰"
-                else: source_icon = "📸"
+                if "radio" in source_lower: source_icon = '<i class="fa-solid fa-radio" style="color: #9b59b6;"></i>'
+                elif "tv" in source_lower: source_icon = '<i class="fa-solid fa-tv" style="color: #3498db;"></i>'
+                elif "youtube" in source_lower: source_icon = '<i class="fa-brands fa-youtube" style="color: #e74c3c;"></i>'
+                elif "twitter" in source_lower: source_icon = '<i class="fa-brands fa-x-twitter" style="color: #f1f2f6;"></i>'
+                elif "facebook" in source_lower: source_icon = '<i class="fa-brands fa-facebook" style="color: #1877f2;"></i>'
+                elif "google news" in source_lower: source_icon = '<i class="fa-solid fa-newspaper" style="color: #ee802f;"></i>'
+                elif "rss" in source_lower: source_icon = '<i class="fa-solid fa-rss" style="color: #f1c40f;"></i>'
+                else: source_icon = '<i class="fa-brands fa-instagram" style="color: #e1306c;"></i>'
                 
                 # Select Sentiment Style classes and badge
                 sent = alert["sentimiento"].lower()
