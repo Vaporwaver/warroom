@@ -79,7 +79,8 @@ Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kpt
 Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_c0b655e0659a11f187d6955330845e08/index.fmp4.m3u8
 VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
 
-DEFAULT_RSS_FEEDS = """https://www.diariolibre.com/rss/portada.xml
+DEFAULT_RSS_FEEDS = """https://news.google.com/rss?hl=es-419&gl=US&ceid=US:es-419
+https://www.diariolibre.com/rss/portada.xml
 https://eldia.com.do/feed/
 https://elnuevodiario.com.do/feed/
 https://remolacha.net/feed/
@@ -806,7 +807,8 @@ Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kpt
 Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_c0b655e0659a11f187d6955330845e08/index.fmp4.m3u8
 VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
 
-    DEFAULT_RSS_FEEDS = """https://www.diariolibre.com/rss/portada.xml
+    DEFAULT_RSS_FEEDS = """https://news.google.com/rss?hl=es-419&gl=US&ceid=US:es-419
+https://www.diariolibre.com/rss/portada.xml
 https://eldia.com.do/feed/
 https://elnuevodiario.com.do/feed/
 https://remolacha.net/feed/
