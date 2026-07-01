@@ -510,6 +510,8 @@ if "facebook_cookies_val" not in st.session_state:
     st.session_state["facebook_cookies_val"] = database.get_state("config_facebook_cookies", "")
 if "rss_feeds_val" not in st.session_state:
     st.session_state["rss_feeds_val"] = database.get_state("config_rss_feeds", DEFAULT_RSS_FEEDS)
+if "google_vision_credentials_val" not in st.session_state:
+    st.session_state["google_vision_credentials_val"] = database.get_state("config_google_vision_credentials", "")
 
 # Initialize persistent active media switches
 for m_key in ["media_radio_active", "media_tv_active", "media_youtube_active", "media_instagram_active", "media_twitter_active", "media_facebook_active", "media_rss_active"]:
@@ -1448,7 +1450,7 @@ st.markdown("---")
 col_left, col_right = st.columns([0.65, 0.35])
 
 with col_left:
-    tab_validation, tab_report, tab_clients = st.tabs(["📥 Bandeja de Validación", "📝 Generador de Reportes", "👥 Clientes"])
+    tab_validation, tab_report, tab_face, tab_clients = st.tabs(["📥 Bandeja de Validación", "📝 Generador de Reportes", "🔍 Búsqueda Facial", "👥 Clientes"])
     
     with tab_validation:
         # Render filters
@@ -2003,6 +2005,159 @@ with col_left:
                 st.session_state.approved_alerts = []
                 st.session_state.ai_summary_report = None
                 st.rerun()
+
+    with tab_face:
+        st.subheader("🔍 Módulo de Búsqueda Facial")
+        st.markdown("Sube la imagen del rostro de una persona para identificarla en los clips de video locales (TV) o buscar noticias relacionadas en la Web (Google Lens / Yandex).")
+        
+        # Import face search module
+        import face_search
+        
+        uploaded_face = st.file_uploader(
+            "Cargar foto de referencia (rostro):",
+            type=["jpg", "jpeg", "png"],
+            key="face_search_uploader",
+            help="Sube un archivo de imagen claro donde aparezca la cara de la persona."
+        )
+        
+        if uploaded_face is not None:
+            # Show the uploaded image
+            st.image(uploaded_face, caption="Imagen Subida", width=200)
+            
+            # Options
+            search_type = st.radio(
+                "Tipo de Búsqueda:",
+                ["🌐 Buscar en la Web (Google Lens / Yandex)", "💻 Buscar en Videos Locales (Base de Datos)"],
+                index=0,
+                horizontal=True
+            )
+            
+            image_bytes = uploaded_face.getvalue()
+            
+            if "web" in search_type.lower():
+                st.markdown("### 🌐 Motores de Búsqueda Visuales")
+                st.markdown("Usa los siguientes botones para abrir la búsqueda visual de esa persona en internet. El sistema hospeda temporalmente tu imagen de forma segura para realizar la consulta:")
+                
+                # Check if search links are already generated to avoid re-uploading on every redraw
+                if "lens_link" not in st.session_state or st.session_state.get("uploaded_face_name") != uploaded_face.name:
+                    with st.spinner("Generando enlaces de búsqueda visual..."):
+                        st.session_state.lens_link = face_search.get_google_lens_link(image_bytes)
+                        st.session_state.yandex_link = face_search.get_yandex_link(image_bytes)
+                        st.session_state.uploaded_face_name = uploaded_face.name
+                
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.session_state.lens_link:
+                        st.link_button("🌐 Buscar Rostro en Google Lens", st.session_state.lens_link, type="primary", use_container_width=True)
+                    else:
+                        st.error("No se pudo generar el enlace para Google Lens.")
+                with col_btn2:
+                    if st.session_state.yandex_link:
+                        st.link_button("🔍 Buscar Rostro en Yandex Images", st.session_state.yandex_link, type="secondary", use_container_width=True)
+                    else:
+                        st.error("No se pudo generar el enlace para Yandex Images.")
+                        
+                st.markdown("---")
+                st.markdown("### 🔑 API Oficial: Google Cloud Vision")
+                st.markdown("Si deseas que los resultados de búsqueda se importen directamente dentro de esta aplicación (sin redirigir al navegador), ingresa la ruta local de tu archivo de credenciales JSON de Google Cloud Service Account:")
+                
+                st.text_input(
+                    "Ruta al archivo JSON de credenciales:",
+                    key="google_vision_credentials_val",
+                    on_change=save_config,
+                    args=("google_vision_credentials_val", "config_google_vision_credentials"),
+                    help="Ejemplo: C:/Users/Usuario/Documents/proyecto-google-cloud-vision-12345.json"
+                )
+                
+                # Button for Google Cloud Vision API Search
+                if st.button("🚀 Buscar con Google Cloud Vision API", use_container_width=True):
+                    with st.spinner("Conectando con Google Cloud Vision API y ejecutando Web Detection..."):
+                        results = face_search.google_vision_web_detection(
+                            image_bytes=image_bytes,
+                            credentials_path=st.session_state.google_vision_credentials_val
+                        )
+                        
+                    if not results:
+                        st.info("ℹ️ No se detectaron coincidencias visuales en portales de noticias o web con Google Cloud Vision API.")
+                    elif len(results) == 1 and 'error' in results[0]:
+                        st.error(f"❌ Error al consultar la API: `{results[0]['error']}`")
+                        st.info("💡 Asegúrate de habilitar la 'Cloud Vision API' en tu consola de Google Cloud y que las credenciales del Service Account sean válidas.")
+                    else:
+                        st.success(f"✅ ¡Se encontraron {len(results)} páginas web con coincidencias visuales!")
+                        
+                        # Display results
+                        for r in results:
+                            with st.container(border=True):
+                                st.markdown(f"📰 **Título de Página:** `{r['page_title']}`")
+                                st.markdown(f"🔗 **Enlace:** [{r['url']}]({r['url']})")
+                        
+            else:
+                st.markdown("### 💻 Análisis de Rostros en Videoteca Local")
+                st.markdown("El sistema analizará todos los clips de video de la televisión en vivo (`static/`) para buscar rostros coincidentes.")
+                
+                similarity = st.slider(
+                    "Umbral de Similitud Facial:",
+                    min_value=0.40,
+                    max_value=0.90,
+                    value=0.65,
+                    step=0.05,
+                    help="Valores más bajos encuentran más candidatos pero con más falsos positivos. 0.65 es el recomendado."
+                )
+                
+                # Button to start local scan
+                if st.button("🚀 Iniciar Escaneo de Video", use_container_width=True):
+                    # First detect face in uploaded image
+                    with st.spinner("Analizando rostro de referencia..."):
+                        target_face = face_search.detect_face_in_image(image_bytes)
+                        
+                    if target_face is None:
+                        st.error("❌ No se detectó ningún rostro en la imagen subida. Por favor, sube una foto de frente con buena iluminación.")
+                    else:
+                        # Display cropped face to confirm
+                        import cv2
+                        face_rgb = cv2.cvtColor(target_face, cv2.COLOR_BGR2RGB)
+                        st.image(face_rgb, caption="Rostro Detectado de Referencia", width=120)
+                        
+                        # Start video scan
+                        project_dir = os.path.dirname(os.path.abspath(__file__))
+                        static_dir = os.path.join(project_dir, "static")
+                        
+                        scan_bar = st.progress(0.0, text="Iniciando escaneo...")
+                        
+                        def progress_cb(pct, msg):
+                            scan_bar.progress(pct, text=msg)
+                            
+                        with st.spinner("Escaneando fotogramas de la videoteca..."):
+                            matches = face_search.search_local_videos(
+                                target_face_bgr=target_face,
+                                static_dir=static_dir,
+                                similarity_threshold=similarity,
+                                progress_callback=progress_cb
+                            )
+                            
+                        if not matches:
+                            st.info("ℹ️ No se encontraron coincidencias del rostro en los videos locales con el umbral seleccionado.")
+                        else:
+                            st.success(f"✅ ¡Se encontraron {len(matches)} coincidencias visuales en la videoteca!")
+                            
+                            # Render matches
+                            for m in matches:
+                                with st.container(border=True):
+                                    col_m1, col_m2 = st.columns([0.3, 0.7])
+                                    with col_m1:
+                                        # Render match image
+                                        match_img_path = os.path.join(static_dir, m['match_image'])
+                                        if os.path.exists(match_img_path):
+                                            st.image(match_img_path, use_container_width=True)
+                                    with col_m2:
+                                        st.markdown(f"🎬 **Video:** `{m['video_name']}`")
+                                        st.markdown(f"⏱️ **Tiempo en Video:** `{m['timestamp_str']}`")
+                                        st.markdown(f"🎯 **Similitud:** `{m['score']}%`")
+                                        
+                                        # Expander to play the video clip directly
+                                        video_file_path = os.path.join(static_dir, m['video_name'])
+                                        with st.expander("▶️ Reproducir Clip"):
+                                            st.video(video_file_path, start_time=int(m['timestamp_sec']))
 
     with tab_clients:
         st.subheader("👥 Administración de Clientes")
