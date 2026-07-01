@@ -310,12 +310,13 @@ def get_whisper_model(model_name="tiny"):
 
 # --- Radio Scraper ---
 class RadioScraper:
-    def __init__(self, name, tunein_url, keywords, duration=30, whisper_model="tiny"):
+    def __init__(self, name, tunein_url, keywords, duration=30, whisper_model="tiny", language="es"):
         self.name = name
         self.tunein_url = tunein_url
         self.keywords = keywords
         self.duration = duration
         self.whisper_model_name = whisper_model
+        self.language = language
 
     def scrape(self):
         import tempfile
@@ -384,7 +385,7 @@ class RadioScraper:
             # 3. Transcribe with Whisper
             model = get_whisper_model(self.whisper_model_name)
             with _whisper_transcription_lock:
-                transcription = model.transcribe(temp_audio, language="es", fp16=(model.device.type == "cuda"))
+                transcription = model.transcribe(temp_audio, language=self.language, fp16=(model.device.type == "cuda"))
             text = transcription.get("text", "")
             
             # 4. Keyword Match
@@ -454,10 +455,11 @@ class RadioScraper:
 
 # --- YouTube Scraper ---
 class YouTubeScraper:
-    def __init__(self, channel_url, keywords):
+    def __init__(self, channel_url, keywords, language="es"):
         self.channel_url = normalize_youtube_channel_url(channel_url)
         self.keywords = keywords
         self.channel_name = extract_youtube_channel_name(self.channel_url)
+        self.language = language
 
     def scrape(self, engine=None):
         def log(msg):
@@ -684,7 +686,7 @@ class YouTubeScraper:
                         model_name = engine.whisper_model if (engine and hasattr(engine, 'whisper_model')) else "tiny"
                         model = get_whisper_model(model_name)
                         with _whisper_transcription_lock:
-                            transcription = model.transcribe(wav_audio_path, language="es", fp16=(model.device.type == "cuda"))
+                            transcription = model.transcribe(wav_audio_path, language=self.language, fp16=(model.device.type == "cuda"))
                         full_text = transcription.get("text", "")
                         
                         # 4. Search keywords and build context using Whisper segment timestamps
@@ -1538,6 +1540,171 @@ class FacebookScraper:
 
 
 
+# --- Google News Scraper ---
+class GoogleNewsScraper:
+    def __init__(self, keywords, language="es", country="DO"):
+        self.keywords = keywords
+        self.language = language
+        self.country = country
+
+    def scrape(self, engine=None):
+        def log(msg):
+            if engine and hasattr(engine, "log_event"):
+                engine.log_event(msg)
+                
+        if not self.keywords:
+            return []
+            
+        all_mentions = []
+        log(f"Iniciando búsqueda en Google News (Región: {self.country}, Idioma: {self.language})...")
+        
+        import urllib.request
+        import xml.etree.ElementTree as ET
+        import email.utils
+        import hashlib
+        import urllib.parse
+        import re
+        
+        hl, gl, ceid = "es-419", "DO", "DO:es-419"
+        if self.language == "en":
+            hl = "en"
+            gl = "US"
+            ceid = "US:en"
+        else:
+            if self.country == "DO":
+                hl, gl, ceid = "es-419", "DO", "DO:es-419"
+            elif self.country == "MX":
+                hl, gl, ceid = "es-419", "MX", "MX:es-419"
+            elif self.country == "ES":
+                hl, gl, ceid = "es", "ES", "ES:es"
+            else:
+                hl, gl, ceid = "es-419", "US", "US:es-419"
+                
+        for keyword in self.keywords:
+            if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
+                break
+                
+            log(f"Buscando en Google News RSS: '{keyword}'")
+            q = urllib.parse.quote(keyword)
+            feed_url = f"https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
+            
+            try:
+                req = urllib.request.Request(
+                    feed_url, 
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                )
+                with urllib.request.urlopen(req, timeout=15.0) as response:
+                    xml_data = response.read()
+                    
+                xml_str = xml_data.decode('utf-8', errors='replace')
+                xml_str = re.sub(r'&(?!([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', xml_str)
+                
+                root = ET.fromstring(xml_str.encode('utf-8'))
+                items = root.findall('.//item')
+                
+                scanned_count = 0
+                for item in items:
+                    title_elem = item.find('title')
+                    link_elem = item.find('link')
+                    desc_elem = item.find('description')
+                    
+                    title = title_elem.text if title_elem is not None else ""
+                    link = link_elem.text if link_elem is not None else ""
+                    desc = desc_elem.text if desc_elem is not None else ""
+                    
+                    title = clean_html_text(title)
+                    desc = clean_html_text(desc)
+                    
+                    if not link:
+                        continue
+                        
+                    identifier = f"gnews_{hashlib.md5(link.encode('utf-8')).hexdigest()[:12]}"
+                    
+                    if database.is_processed(identifier):
+                        continue
+                        
+                    pubdate_elem = item.find('pubDate')
+                    pubdate_text = pubdate_elem.text if pubdate_elem is not None else ""
+                    is_too_old = False
+                    pub_dt = None
+                    if pubdate_text:
+                        try:
+                            pub_dt = email.utils.parsedate_to_datetime(pubdate_text)
+                            if time.time() - pub_dt.timestamp() > 14 * 24 * 3600:
+                                is_too_old = True
+                        except Exception:
+                            pass
+                            
+                    if is_too_old:
+                        database.mark_processed(identifier, "google_news", has_mention=False)
+                        continue
+                        
+                    scanned_count += 1
+                    full_text = f"{title}. {desc}"
+                    found_kws = contains_keywords(full_text, self.keywords)
+                    
+                    if keyword not in found_kws:
+                        found_kws.append(keyword)
+                        
+                    database.mark_processed(identifier, "google_news", has_mention=len(found_kws) > 0)
+                    
+                    if found_kws:
+                        publisher = "Google News"
+                        if " - " in title:
+                            parts = title.rsplit(" - ", 1)
+                            if len(parts) > 1:
+                                publisher = parts[1].strip()
+                                
+                        all_mentions.append({
+                            "source": f"📰 Google News ({publisher})",
+                            "text": f"{title}. {desc}".strip(),
+                            "keywords": found_kws,
+                            "timestamp": pub_dt.timestamp() if pub_dt else time.time(),
+                            "identifier": identifier,
+                            "simulated": False,
+                            "metadata": {
+                                "post_url": link
+                            }
+                        })
+                log(f"Búsqueda de '{keyword}' en Google News completada. {scanned_count} noticias nuevas analizadas.")
+            except Exception as e:
+                log(f"Error buscando '{keyword}' en Google News: {str(e)}")
+                
+        return all_mentions
+
+    def get_simulated_mention(self, diagnostic_msg=None):
+        if random.random() > 0.3:
+            return []
+            
+        templates = [
+            "El presidente Luis Abinader anuncia nuevas medidas económicas para la estabilización de los precios de la canasta básica en República Dominicana.",
+            "Aumento en el flujo de turistas en Punta Cana alcanza niveles récord durante el último trimestre, consolidando la reactivación del sector.",
+            "Especialistas advierten sobre la necesidad de reformas estructurales en el sector eléctrico para evitar pérdidas y mejorar el servicio.",
+            "Inauguran nuevo centro educativo tecnológico en Santiago con capacidad para más de 500 estudiantes de escasos recursos."
+        ]
+        text = random.choice(templates)
+        
+        if self.keywords:
+            kw = random.choice(self.keywords)
+            text = f"{text} Buscan solucionar tema de {kw}."
+            
+        found_kws = contains_keywords(text, self.keywords)
+        kw_for_source = found_kws[0] if found_kws else (self.keywords[0] if self.keywords else "noticia")
+        
+        return [{
+            "source": f"📰 Google News (Simulado)",
+            "text": text,
+            "keywords": found_kws,
+            "timestamp": time.time(),
+            "identifier": f"gnews_sim_{int(time.time())}",
+            "simulated": True,
+            "diagnostic": diagnostic_msg,
+            "metadata": {
+                "post_url": "https://news.google.com"
+            }
+        }]
+
+
 # --- RSS Feed Scraper ---
 class RSSScraper:
     def __init__(self, feed_url, keywords):
@@ -1681,12 +1848,13 @@ class RSSScraper:
 
 # --- TV Scraper ---
 class TVScraper:
-    def __init__(self, name, stream_url, keywords, duration=20, whisper_model="tiny"):
+    def __init__(self, name, stream_url, keywords, duration=20, whisper_model="tiny", language="es"):
         self.name = name
         self.stream_url = stream_url
         self.keywords = keywords
         self.duration = duration
         self.whisper_model_name = whisper_model
+        self.language = language
 
     def scrape(self):
         import tempfile
@@ -1778,7 +1946,7 @@ class TVScraper:
             # 3. Transcribe with Whisper
             model = get_whisper_model(self.whisper_model_name)
             with _whisper_transcription_lock:
-                transcription = model.transcribe(temp_audio, language="es", fp16=(model.device.type == "cuda"))
+                transcription = model.transcribe(temp_audio, language=self.language, fp16=(model.device.type == "cuda"))
             text = transcription.get("text", "")
             
             if os.path.exists(temp_audio):
@@ -2016,7 +2184,7 @@ def clean_html_text(raw_html):
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO"):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -2026,6 +2194,8 @@ class MonitoringEngine:
         self.twitter_authtoken = twitter_authtoken
         self.facebook_cookies = facebook_cookies
         self.uptime_status = {}
+        self.language = language
+        self.country = country
         
         self.twitter_active = twitter_active if twitter_active is not None else False
         self.facebook_active = facebook_active if facebook_active is not None else False
@@ -2049,9 +2219,9 @@ class MonitoringEngine:
         # Instantiate Scrapers
         self.scrapers = []
         for r in self.radio_channels:
-            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model))
+            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language))
         for yt in self.youtube_channels:
-            self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords))
+            self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language))
         for ig in self.instagram_channels:
             self.scrapers.append(InstagramScraper(username=ig, keywords=self.keywords, sessionid=self.instagram_sessionid))
             
@@ -2063,10 +2233,13 @@ class MonitoringEngine:
         if self.facebook_active:
             self.scrapers.append(FacebookScraper(keywords=self.keywords, cookies_str=self.facebook_cookies))
             
-        for rss in self.rss_feeds:
-            self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
+        # Instantiate GoogleNewsScraper if RSS is active
+        if self.rss_feeds:
+            self.scrapers.append(GoogleNewsScraper(keywords=self.keywords, language=self.language, country=self.country))
+            for rss in self.rss_feeds:
+                self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:
-            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model))
+            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language))
             
         self.analyzer = OllamaAnalyzer(self.ollama_model)
 
@@ -2136,7 +2309,7 @@ class MonitoringEngine:
                     scraper.cookies_str = self.facebook_cookies
             self.analyzer.model_name = self.ollama_model
             
-            num_workers = min(3, len(self.scrapers))
+            num_workers = len(self.scrapers)
             if num_workers > 0:
                 self.log_event(f"Iniciando ciclo de monitoreo paralelo para {len(self.scrapers)} canales...")
                 

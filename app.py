@@ -513,6 +513,10 @@ if "rss_feeds_val" not in st.session_state:
     st.session_state["rss_feeds_val"] = database.get_state("config_rss_feeds", DEFAULT_RSS_FEEDS)
 if "google_vision_credentials_val" not in st.session_state:
     st.session_state["google_vision_credentials_val"] = database.get_state("config_google_vision_credentials", "")
+if "engine_language_val" not in st.session_state:
+    st.session_state["engine_language_val"] = database.get_state("config_engine_language", "Español")
+if "engine_country_val" not in st.session_state:
+    st.session_state["engine_country_val"] = database.get_state("config_engine_country", "República Dominicana (RD)")
 
 # Initialize persistent active media switches
 for m_key in ["media_radio_active", "media_tv_active", "media_youtube_active", "media_instagram_active", "media_twitter_active", "media_facebook_active", "media_rss_active"]:
@@ -613,6 +617,20 @@ if not st.session_state.monitoring_active:
             rss_lines = st.session_state.get("rss_feeds_val", "").split("\n")
             rss_list = [line.strip() for line in rss_lines if line.strip()]
         
+        # Resolve language and country codes
+        lang_val = st.session_state.get("engine_language_val", "Español")
+        lang_code = "en" if lang_val == "Inglés" else "es"
+        
+        country_val = st.session_state.get("engine_country_val", "República Dominicana (RD)")
+        if "República Dominicana" in country_val:
+            country_code = "DO"
+        elif "Estados Unidos" in country_val:
+            country_code = "US"
+        elif "España" in country_val:
+            country_code = "ES"
+        else:
+            country_code = "MX"
+            
         # Instantiate and run engine
         st.session_state.engine = scrapers.MonitoringEngine(
             keywords=kws,
@@ -629,7 +647,9 @@ if not st.session_state.monitoring_active:
             ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
             instagram_sessionid=st.session_state.get("instagram_sessionid_val", ""),
             twitter_authtoken=st.session_state.get("twitter_authtoken_val", ""),
-            facebook_cookies=st.session_state.get("facebook_cookies_val", "")
+            facebook_cookies=st.session_state.get("facebook_cookies_val", ""),
+            language=lang_code,
+            country=country_code
         )
         st.session_state.engine.start()
         st.session_state.monitoring_active = True
@@ -662,6 +682,26 @@ st.sidebar.slider(
     step=5,
     key="scan_interval_val",
     disabled=st.session_state.monitoring_active
+)
+
+st.sidebar.selectbox(
+    "País de Monitoreo (Google News)",
+    options=["República Dominicana (RD)", "Estados Unidos (US)", "España (ES)", "México (MX)"],
+    key="engine_country_val",
+    disabled=st.session_state.monitoring_active,
+    on_change=save_config,
+    args=("engine_country_val", "config_engine_country"),
+    help="Define la región para las búsquedas de Google News."
+)
+
+st.sidebar.selectbox(
+    "Idioma de Monitoreo",
+    options=["Español", "Inglés"],
+    key="engine_language_val",
+    disabled=st.session_state.monitoring_active,
+    on_change=save_config,
+    args=("engine_language_val", "config_engine_language"),
+    help="Define el idioma para Google News y transcripciones locales con Whisper."
 )
 
 st.sidebar.selectbox(
