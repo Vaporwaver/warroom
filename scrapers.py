@@ -1073,8 +1073,7 @@ class InstagramScraper:
 
 # --- Twitter (X) Scraper ---
 class TwitterScraper:
-    def __init__(self, username, keywords, auth_token=None):
-        self.username = username
+    def __init__(self, keywords, auth_token=None):
         self.keywords = keywords
         self.auth_token = auth_token
 
@@ -1083,11 +1082,18 @@ class TwitterScraper:
             if engine and hasattr(engine, "log_event"):
                 engine.log_event(msg)
                 
+        if not self.keywords:
+            log("Twitter: No hay palabras clave configuradas para buscar.")
+            return []
+            
+        all_mentions = []
+        log("Iniciando búsqueda de Twitter por palabras clave...")
+        
         try:
             from playwright.sync_api import sync_playwright
             from playwright_stealth import Stealth
-            
-            log(f"Iniciando escaneo de Twitter (@{self.username})...")
+            import urllib.parse
+            import hashlib
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -1112,117 +1118,117 @@ class TwitterScraper:
                         'path': '/'
                     }])
                 
-                url = f"https://x.com/{self.username}"
-                page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                page.wait_for_timeout(3000) # Give extra time for React rendering
-                
-                # Check for login redirection
-                if "/login" in page.url.lower():
-                    log(f"Twitter redirigió al muro de inicio de sesión. Asegúrate de configurar un 'auth_token' válido.")
-                    browser.close()
-                    return []
-                
-                # Scroll down slightly (1 scroll) to trigger page load
-                try:
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
-                    page.wait_for_timeout(2000)
-                except Exception:
-                    pass
-
-                # Extract tweets
-                tweets = page.evaluate("""
-                    () => {
-                        const results = [];
-                        const tweetElements = document.querySelectorAll('article[data-testid="tweet"]');
-                        for (const el of tweetElements) {
-                            // Text of the tweet
-                            const textEl = el.querySelector('[data-testid="tweetText"]');
-                            const text = textEl ? textEl.innerText : '';
-                            
-                            // Link/status URL and datetime
-                            const links = el.querySelectorAll('a');
-                            let tweetUrl = '';
-                            for (const a of links) {
-                                const href = a.getAttribute('href') || '';
-                                if (href.includes('/status/')) {
-                                    tweetUrl = 'https://x.com' + href;
-                                    break;
+                for keyword in self.keywords:
+                    if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
+                        break
+                        
+                    log(f"Buscando en Twitter: '{keyword}'")
+                    url = f"https://x.com/search?q={urllib.parse.quote(keyword)}&f=live"
+                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                    page.wait_for_timeout(3000) # Give extra time for React rendering
+                    
+                    # Check for login redirection
+                    if "/login" in page.url.lower():
+                        log(f"Twitter redirigió al muro de inicio de sesión. Asegúrate de configurar un 'auth_token' válido.")
+                        break
+                    
+                    # Scroll down once/twice to trigger page load
+                    try:
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
+                        page.wait_for_timeout(2000)
+                    except Exception:
+                        pass
+                        
+                    # Extract tweets
+                    tweets = page.evaluate("""
+                        () => {
+                            const results = [];
+                            const tweetElements = document.querySelectorAll('article[data-testid="tweet"]');
+                            for (const el of tweetElements) {
+                                // Text of the tweet
+                                const textEl = el.querySelector('[data-testid="tweetText"]');
+                                const text = textEl ? textEl.innerText : '';
+                                
+                                // Link/status URL and datetime
+                                const links = el.querySelectorAll('a');
+                                let tweetUrl = '';
+                                for (const a of links) {
+                                    const href = a.getAttribute('href') || '';
+                                    if (href.includes('/status/')) {
+                                        tweetUrl = 'https://x.com' + href;
+                                        break;
+                                    }
                                 }
+                                
+                                const timeEl = el.querySelector('time');
+                                const datetime = timeEl ? timeEl.getAttribute('datetime') : '';
+                                
+                                results.push({ text, url: tweetUrl, datetime });
                             }
-                            
-                            const timeEl = el.querySelector('time');
-                            const datetime = timeEl ? timeEl.getAttribute('datetime') : '';
-                            
-                            results.push({ text, url: tweetUrl, datetime });
+                            return results;
                         }
-                        return results;
-                    }
-                """)
-                
-                mentions = []
-                scanned_count = 0
-                
-                log(f"Se encontraron {len(tweets)} tuits en el feed de @{self.username}.")
-                for tw in tweets:
-                    tweet_text = tw["text"]
-                    tweet_url = tw["url"]
-                    datetime_str = tw["datetime"]
+                    """)
                     
-                    if not tweet_text or not tweet_url:
-                        continue
-                    
-                    # Extract unique tweet status ID
-                    tweet_id = None
-                    parts = tweet_url.split("/status/")
-                    if len(parts) > 1:
-                        tweet_id = parts[1].split("?")[0].strip()
-                    
-                    if not tweet_id:
-                        tweet_id = hashlib.md5(tweet_url.encode()).hexdigest()
+                    scanned_count = 0
+                    for tw in tweets:
+                        tweet_text = tw["text"]
+                        tweet_url = tw["url"]
+                        datetime_str = tw["datetime"]
                         
-                    identifier = f"tw_{tweet_id}"
-                    
-                    if database.is_processed(identifier):
-                        continue
+                        if not tweet_text or not tweet_url:
+                            continue
+                            
+                        # Extract unique tweet status ID
+                        tweet_id = None
+                        parts = tweet_url.split("/status/")
+                        if len(parts) > 1:
+                            tweet_id = parts[1].split("?")[0].strip()
                         
-                    # Parse timestamp if datetime exists
-                    taken_at = 0
-                    if datetime_str:
-                        try:
-                            import datetime as dt
-                            clean_dt = datetime_str.split(".")[0].replace("Z", "")
-                            parsed_dt = dt.datetime.strptime(clean_dt, "%Y-%m-%dT%H:%M:%S")
-                            taken_at = parsed_dt.replace(tzinfo=dt.timezone.utc).timestamp()
-                        except Exception:
-                            taken_at = 0
+                        if not tweet_id:
+                            tweet_id = hashlib.md5(tweet_url.encode()).hexdigest()
+                            
+                        identifier = f"tw_{tweet_id}"
+                        
+                        if database.is_processed(identifier):
+                            continue
+                            
+                        # Parse timestamp if datetime exists
+                        taken_at = 0
+                        if datetime_str:
+                            try:
+                                import datetime as dt
+                                clean_dt = datetime_str.split(".")[0].replace("Z", "")
+                                parsed_dt = dt.datetime.strptime(clean_dt, "%Y-%m-%dT%H:%M:%S")
+                                taken_at = parsed_dt.replace(tzinfo=dt.timezone.utc).timestamp()
+                            except Exception:
+                                taken_at = 0
+                        
+                        # Skip tweets older than 2 weeks
+                        if taken_at > 0 and (time.time() - taken_at > 14 * 24 * 3600):
+                            database.mark_processed(identifier, "twitter", has_mention=False)
+                            continue
+                        
+                        scanned_count += 1
+                        found_kws = contains_keywords(tweet_text, self.keywords)
+                        has_mention = len(found_kws) > 0
+                        database.mark_processed(identifier, "twitter", has_mention=has_mention)
+                        
+                        if found_kws:
+                            all_mentions.append({
+                                "source": "Twitter",
+                                "text": tweet_text.strip(),
+                                "keywords": found_kws,
+                                "timestamp": taken_at if taken_at > 0 else time.time(),
+                                "identifier": identifier,
+                                "simulated": False,
+                                "metadata": {
+                                    "post_url": tweet_url
+                                }
+                            })
+                    log(f"Búsqueda de '{keyword}' completada en Twitter. {scanned_count} tuits nuevos analizados.")
                     
-                    # Skip tweets older than 2 weeks
-                    if taken_at > 0 and (time.time() - taken_at > 14 * 24 * 3600):
-                        log(f"El tuit {tweet_id} es mayor de 2 semanas. Marcándolo como procesado y omitiéndolo.")
-                        database.mark_processed(identifier, "twitter", has_mention=False)
-                        continue
-                    
-                    scanned_count += 1
-                    found_kws = contains_keywords(tweet_text, self.keywords)
-                    has_mention = len(found_kws) > 0
-                    database.mark_processed(identifier, "twitter", has_mention=has_mention)
-                    
-                    if found_kws:
-                        mentions.append({
-                            "source": f"Twitter (@{self.username})",
-                            "text": tweet_text.strip(),
-                            "keywords": found_kws,
-                            "timestamp": taken_at if taken_at > 0 else time.time(),
-                            "identifier": identifier,
-                            "simulated": False,
-                            "metadata": {
-                                "post_url": tweet_url
-                            }
-                        })
-                
-                log(f"Escaneo de Twitter (@{self.username}) completado. {scanned_count} tuits analizados.")
                 browser.close()
-                return mentions
+                return all_mentions
         except Exception as e:
             log(f"Error raspando Twitter en vivo: {str(e)}")
             return []
@@ -1242,7 +1248,7 @@ class TwitterScraper:
         found_kws = contains_keywords(text, self.keywords)
         
         return [{
-            "source": f"Twitter (@{self.username})",
+            "source": "Twitter",
             "text": text,
             "keywords": found_kws,
             "timestamp": time.time(),
@@ -1250,15 +1256,14 @@ class TwitterScraper:
             "simulated": True,
             "diagnostic": diagnostic_msg,
             "metadata": {
-                "post_url": f"https://x.com/{self.username}"
+                "post_url": "https://x.com/search"
             }
         }]
 
 
 # --- Facebook Scraper ---
 class FacebookScraper:
-    def __init__(self, username, keywords, cookies_str=None):
-        self.username = username
+    def __init__(self, keywords, cookies_str=None):
         self.keywords = keywords
         self.cookies_str = cookies_str
 
@@ -1270,8 +1275,17 @@ class FacebookScraper:
         try:
             from playwright.sync_api import sync_playwright
             from playwright_stealth import Stealth
+            import urllib.parse
+            import hashlib
+            import time
+            import json
             
-            log(f"Iniciando escaneo de Facebook ({self.username})...")
+            if not self.keywords:
+                log("Facebook: No hay palabras clave configuradas para buscar.")
+                return []
+                
+            all_mentions = []
+            log("Iniciando búsqueda de Facebook por palabras clave...")
             
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
@@ -1310,120 +1324,138 @@ class FacebookScraper:
                         if cookies_to_add:
                             context.add_cookies(cookies_to_add)
                 
-                url = f"https://www.facebook.com/{self.username}"
-                page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                page.wait_for_timeout(3000) # Give extra time for rendering
-                
-                # Check for login redirect or banner
-                if "login" in page.url.lower() and not self.cookies_str:
-                    log("Facebook redirigió a la página de login. Se requieren cookies para continuar.")
-                    browser.close()
-                    return []
-                
-                # Scroll down slightly (1 scroll) to trigger page load
-                try:
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
-                    page.wait_for_timeout(2000)
-                except Exception:
-                    pass
-
-                # Extract posts
-                posts = page.evaluate("""
-                    () => {
-                        const results = [];
-                        const articles = document.querySelectorAll('div[role="article"]');
-                        for (const el of articles) {
-                            let text = '';
-                            const msgEl = el.querySelector('div[data-ad-preview="message"]');
-                            if (msgEl) {
-                                text = msgEl.innerText;
-                            } else {
-                                const dirs = el.querySelectorAll('div[dir="auto"]');
-                                let textParts = [];
-                                for (const d of dirs) {
-                                    const val = d.innerText.trim();
-                                    if (val.length > 20) {
-                                        textParts.push(val);
-                                    }
-                                }
-                                text = textParts.join('\\n');
-                            }
-                            
-                            // Find link
-                            const links = el.querySelectorAll('a');
-                            let postUrl = '';
-                            for (const a of links) {
-                                const href = a.getAttribute('href') || '';
-                                if (href.includes('/posts/') || href.includes('/permalink.php') || href.includes('/photos/') || href.includes('/story.php')) {
-                                    if (href.startsWith('/')) {
-                                        postUrl = 'https://www.facebook.com' + href;
-                                    } else if (href.startsWith('https://')) {
-                                        postUrl = href;
-                                    }
-                                    if (postUrl) {
-                                        postUrl = postUrl.split('?')[0];
-                                        break;
-                                    }
-                                }
-                            }
-                            results.push({ text, url: postUrl });
-                        }
-                        return results;
-                    }
-                """)
-                
-                mentions = []
-                scanned_count = 0
-                
-                log(f"Se encontraron {len(posts)} publicaciones en Facebook para {self.username}.")
-                for pt in posts:
-                    post_text = pt["text"]
-                    post_url = pt["url"]
-                    
-                    if not post_text:
-                        continue
-                    
-                    # Generate a unique identifier
-                    if post_url:
-                        h = hashlib.md5(post_url.encode()).hexdigest()
-                    else:
-                        h = hashlib.md5(post_text.encode()).hexdigest()
-                        post_url = f"https://www.facebook.com/{self.username}"
+                # Search Facebook for each keyword
+                for keyword in self.keywords:
+                    if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
+                        break
                         
-                    identifier = f"fb_{h}"
+                    log(f"Buscando en Facebook: '{keyword}'")
+                    url = f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(keyword)}"
+                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                    page.wait_for_timeout(3000) # Give extra time for rendering
                     
-                    if database.is_processed(identifier):
-                        continue
+                    # Check for login redirect or banner
+                    if "login" in page.url.lower() and not self.cookies_str:
+                        log("Facebook redirigió a la página de login. Se requieren cookies para continuar.")
+                        browser.close()
+                        return all_mentions
                     
-                    scanned_count += 1
-                    found_kws = contains_keywords(post_text, self.keywords)
-                    has_mention = len(found_kws) > 0
-                    database.mark_processed(identifier, "facebook", has_mention=has_mention)
+                    # Scroll down multiple times to load a larger list of search results
+                    for i in range(5):
+                        if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
+                            break
+                        try:
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                            page.wait_for_timeout(2000)
+                        except Exception:
+                            pass
                     
-                    if found_kws:
-                        mentions.append({
-                            "source": f"Facebook ({self.username})",
-                            "text": post_text.strip(),
-                            "keywords": found_kws,
-                            "timestamp": time.time(),
-                            "identifier": identifier,
-                            "simulated": False,
-                            "metadata": {
-                                "post_url": post_url
+                    # Extract posts
+                    posts = page.evaluate("""
+                        () => {
+                            const results = [];
+                            const articles = document.querySelectorAll('div[role="article"]');
+                            for (const el of articles) {
+                                let text = '';
+                                const msgEl = el.querySelector('div[data-ad-preview="message"]');
+                                if (msgEl) {
+                                    text = msgEl.innerText;
+                                } else {
+                                    const dirs = el.querySelectorAll('div[dir="auto"]');
+                                    let textParts = [];
+                                    const ignoreWords = ['me gusta', 'comentar', 'compartir', 'ver más', 'ver traducción', 'escribe un comentario', 'compartido con'];
+                                    for (const d of dirs) {
+                                        const val = d.innerText.trim();
+                                        if (val.length > 0) {
+                                            const lowerVal = val.toLowerCase();
+                                            const isReactions = /^\d+$/.test(val) || /^\d+\s*(mil|m)?$/i.test(val);
+                                            const isIgnore = ignoreWords.some(word => lowerVal.includes(word));
+                                            if (!isReactions && !isIgnore) {
+                                                textParts.push(val);
+                                            }
+                                        }
+                                    }
+                                    textParts = [...new Set(textParts)];
+                                    text = textParts.join('\\n');
+                                }
+                                
+                                // Find link
+                                const links = el.querySelectorAll('a');
+                                let postUrl = '';
+                                for (const a of links) {
+                                    const href = a.getAttribute('href') || '';
+                                    if (href.includes('/posts/') || href.includes('/permalink.php') || href.includes('/photos/') || href.includes('/story.php') || href.includes('/videos/') || href.includes('/groups/')) {
+                                        if (href.startsWith('/')) {
+                                            postUrl = 'https://www.facebook.com' + href;
+                                        } else if (href.startsWith('https://')) {
+                                            postUrl = href;
+                                        }
+                                        if (postUrl) {
+                                            postUrl = postUrl.split('?')[0];
+                                            break;
+                                        }
+                                    }
+                                }
+                                results.push({ text, url: postUrl });
                             }
-                        })
+                            return results;
+                        }
+                    """)
+                    
+                    scanned_count = 0
+                    for pt in posts:
+                        post_text = pt["text"]
+                        post_url = pt["url"]
+                        
+                        if not post_text:
+                            continue
+                        
+                        # Generate a unique identifier
+                        if post_url:
+                            h = hashlib.md5(post_url.encode()).hexdigest()
+                        else:
+                            h = hashlib.md5(post_text.encode()).hexdigest()
+                            post_url = f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(keyword)}"
+                            
+                        identifier = f"fb_{h}"
+                        
+                        if database.is_processed(identifier):
+                            continue
+                        
+                        scanned_count += 1
+                        found_kws = contains_keywords(post_text, self.keywords)
+                        # Since this post is retrieved from search for 'keyword', it is a valid match!
+                        if keyword not in found_kws:
+                            found_kws.append(keyword)
+                            
+                        has_mention = len(found_kws) > 0
+                        database.mark_processed(identifier, "facebook", has_mention=has_mention)
+                        
+                        if found_kws:
+                            all_mentions.append({
+                                "source": f"Facebook (Búsqueda: {keyword})",
+                                "text": post_text.strip(),
+                                "keywords": found_kws,
+                                "timestamp": time.time(),
+                                "identifier": identifier,
+                                "simulated": False,
+                                "metadata": {
+                                    "post_url": post_url
+                                }
+                            })
+                    log(f"Búsqueda de '{keyword}' completada. {scanned_count} posts analizados.")
                 
-                log(f"Escaneo de Facebook ({self.username}) completado. {scanned_count} posts analizados.")
                 browser.close()
-                return mentions
+                return all_mentions
         except Exception as e:
             log(f"Error raspando Facebook en vivo: {str(e)}")
             return []
 
     def get_simulated_mention(self, diagnostic_msg=None):
+        import urllib.parse
         if random.random() > 0.3:
             return []
-            
+        
         templates = [
             "🔴 EN VIVO: Conversando con líderes comunitarios sobre los problemas de agua y electricidad en el municipio. Déjanos tus preguntas en los comentarios y comparte esta transmisión.",
             "📝 EDITORIAL: La necesidad de una verdadera transparencia legislativa. No basta con discursos, se necesitan hechos y auditorías reales de cada peso invertido en nuestro país.",
@@ -1432,10 +1464,16 @@ class FacebookScraper:
             "🚨 ALERTA: Estafadores están utilizando perfiles falsos para ofrecer empleos en nombre de nuestra organización. Recuerda que no solicitamos dinero para postularte."
         ]
         text = random.choice(templates)
+        
+        if self.keywords:
+            kw = random.choice(self.keywords)
+            text = f"{text} #{kw}"
+            
         found_kws = contains_keywords(text, self.keywords)
+        kw_for_source = found_kws[0] if found_kws else (self.keywords[0] if self.keywords else "búsqueda")
         
         return [{
-            "source": f"Facebook ({self.username})",
+            "source": f"Facebook (Búsqueda: {kw_for_source})",
             "text": text,
             "keywords": found_kws,
             "timestamp": time.time(),
@@ -1443,9 +1481,10 @@ class FacebookScraper:
             "simulated": True,
             "diagnostic": diagnostic_msg,
             "metadata": {
-                "post_url": f"https://www.facebook.com/{self.username}"
+                "post_url": f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(kw_for_source)}"
             }
         }]
+
 
 
 # --- RSS Feed Scraper ---
@@ -1897,9 +1936,9 @@ def get_scraper_display_name(scraper):
     elif cls_name == "InstagramScraper":
         return f"📸 Instagram (@{scraper.username})"
     elif cls_name == "TwitterScraper":
-        return f"🐦 Twitter (@{scraper.username})"
+        return "🐦 Twitter (Búsqueda)"
     elif cls_name == "FacebookScraper":
-        return f"📘 Facebook ({scraper.username})"
+        return "📘 Facebook (Búsqueda)"
     elif cls_name == "RSSScraper":
         return f"📰 RSS ({scraper.feed_name})"
     return str(scraper)
@@ -1926,7 +1965,7 @@ def clean_html_text(raw_html):
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, twitter_channels=None, facebook_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -1937,11 +1976,12 @@ class MonitoringEngine:
         self.facebook_cookies = facebook_cookies
         self.uptime_status = {}
         
+        self.twitter_active = twitter_active if twitter_active is not None else False
+        self.facebook_active = facebook_active if facebook_active is not None else False
+            
         self.radio_channels = radio_channels if radio_channels is not None else [{"name": "Z101", "url": "https://tunein.com/radio/Z101FM-1013-s102394/"}]
         self.youtube_channels = [normalize_youtube_channel_url(yt) for yt in youtube_channels if yt.strip()] if youtube_channels is not None else ["https://www.youtube.com/@nuriapiera/videos"]
         self.instagram_channels = instagram_channels if instagram_channels is not None else ["nuriapiera"]
-        self.twitter_channels = twitter_channels if twitter_channels is not None else ["somospueblord"]
-        self.facebook_channels = facebook_channels if facebook_channels is not None else ["somospueblord"]
         self.rss_feeds = rss_feeds if rss_feeds is not None else ["https://somospueblo.com/feed/"]
         self.tv_channels = tv_channels if tv_channels is not None else [{"name": "CDN 37", "url": "https://www.youtube.com/watch?v=h34A93R1g3E"}]
         
@@ -1963,10 +2003,15 @@ class MonitoringEngine:
             self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords))
         for ig in self.instagram_channels:
             self.scrapers.append(InstagramScraper(username=ig, keywords=self.keywords, sessionid=self.instagram_sessionid))
-        for tw in self.twitter_channels:
-            self.scrapers.append(TwitterScraper(username=tw, keywords=self.keywords, auth_token=self.twitter_authtoken))
-        for fb in self.facebook_channels:
-            self.scrapers.append(FacebookScraper(username=fb, keywords=self.keywords, cookies_str=self.facebook_cookies))
+            
+        # Instantiate TwitterScraper once if active
+        if self.twitter_active:
+            self.scrapers.append(TwitterScraper(keywords=self.keywords, auth_token=self.twitter_authtoken))
+        
+        # Instantiate FacebookScraper once if active
+        if self.facebook_active:
+            self.scrapers.append(FacebookScraper(keywords=self.keywords, cookies_str=self.facebook_cookies))
+            
         for rss in self.rss_feeds:
             self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:

@@ -503,10 +503,7 @@ if "youtube_channels_val" not in st.session_state:
     st.session_state["youtube_channels_val"] = database.get_state("config_youtube_channels", "https://www.youtube.com/@nuriapiera/videos")
 if "instagram_users_val" not in st.session_state:
     st.session_state["instagram_users_val"] = database.get_state("config_instagram_users", "nuriapiera")
-if "twitter_users_val" not in st.session_state:
-    st.session_state["twitter_users_val"] = database.get_state("config_twitter_users", "somospueblord")
-if "facebook_users_val" not in st.session_state:
-    st.session_state["facebook_users_val"] = database.get_state("config_facebook_users", "somospueblord")
+
 if "twitter_authtoken_val" not in st.session_state:
     st.session_state["twitter_authtoken_val"] = database.get_state("config_twitter_authtoken", "")
 if "facebook_cookies_val" not in st.session_state:
@@ -607,18 +604,6 @@ if not st.session_state.monitoring_active:
             ig_lines = st.session_state.get("instagram_users_val", "").split("\n")
             instagram_list = [line.strip() for line in ig_lines if line.strip()]
         
-        # Parse Twitter usernames
-        twitter_list = []
-        if st.session_state.get("media_twitter_active", True):
-            tw_lines = st.session_state.get("twitter_users_val", "").split("\n")
-            twitter_list = [line.strip() for line in tw_lines if line.strip()]
-        
-        # Parse Facebook usernames/pages
-        facebook_list = []
-        if st.session_state.get("media_facebook_active", True):
-            fb_lines = st.session_state.get("facebook_users_val", "").split("\n")
-            facebook_list = [line.strip() for line in fb_lines if line.strip()]
-        
         # Parse RSS feeds
         rss_list = []
         if st.session_state.get("media_rss_active", True):
@@ -631,8 +616,8 @@ if not st.session_state.monitoring_active:
             radio_channels=radio_list,
             youtube_channels=youtube_list,
             instagram_channels=instagram_list,
-            twitter_channels=twitter_list,
-            facebook_channels=facebook_list,
+            twitter_active=st.session_state.get("media_twitter_active", True),
+            facebook_active=st.session_state.get("media_facebook_active", True),
             rss_feeds=rss_list,
             tv_channels=tv_list,
             scan_interval=st.session_state.get("scan_interval_val", 30),
@@ -860,22 +845,6 @@ https://eldinero.com.do/feed/"""
             args=("instagram_users_val", "config_instagram_users"),
             help="Ingresa un usuario por línea (sin @)."
         )
-    if st.session_state.get("media_twitter_active", True):
-        st.sidebar.text_area(
-            "Cuentas de Twitter (X)",
-            key="twitter_users_val",
-            on_change=save_config,
-            args=("twitter_users_val", "config_twitter_users"),
-            help="Ingresa una cuenta de Twitter por línea (sin @)."
-        )
-    if st.session_state.get("media_facebook_active", True):
-        st.sidebar.text_area(
-            "Páginas/Perfiles de Facebook",
-            key="facebook_users_val",
-            on_change=save_config,
-            args=("facebook_users_val", "config_facebook_users"),
-            help="Ingresa una página o perfil de Facebook por línea."
-        )
     if st.session_state.get("media_rss_active", True):
         st.sidebar.text_area(
             "Feeds RSS (URLs)",
@@ -908,15 +877,11 @@ else:
             ig_names = [f"📸 @{user}" for user in engine.instagram_channels]
             st.sidebar.caption(" / ".join(ig_names))
             
-        tw_ch = getattr(engine, "twitter_channels", [])
-        if tw_ch:
-            tw_names = [f"🐦 @{user}" for user in tw_ch]
-            st.sidebar.caption(" / ".join(tw_names))
+        if getattr(engine, "twitter_active", False):
+            st.sidebar.caption("🐦 Twitter (Búsqueda de Palabras Clave)")
             
-        fb_ch = getattr(engine, "facebook_channels", [])
-        if fb_ch:
-            fb_names = [f"📘 {user}" for user in fb_ch]
-            st.sidebar.caption(" / ".join(fb_names))
+        if getattr(engine, "facebook_active", False):
+            st.sidebar.caption("📘 Facebook (Búsqueda de Palabras Clave)")
             
         if engine.rss_feeds:
             rss_names = [f"📰 {scrapers.extract_rss_domain(url)}" for url in engine.rss_feeds]
