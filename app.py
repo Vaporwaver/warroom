@@ -2344,6 +2344,13 @@ with col_left:
                     # Clear input safely in the callback
                     st.session_state.new_kw_input_field = ""
 
+            def append_operator_callback(op):
+                current = st.session_state.get("new_kw_input_field", "")
+                if current and not current.endswith(" "):
+                    st.session_state.new_kw_input_field = current + " " + op + " "
+                else:
+                    st.session_state.new_kw_input_field = current + op + " "
+
             # Form fields
             form_name = st.text_input("Nombre del Cliente", value=default_name, placeholder="Ej. Presidencia de la República")
             form_email = st.text_input("Correo(s) para Reportes (separados por comas)", value=default_email, placeholder="ejemplo1@correo.com, ejemplo2@correo.com")
@@ -2367,6 +2374,21 @@ with col_left:
                     key="add_kw_btn",
                     on_click=add_keyword_callback
                 )
+            
+            # Row of boolean helper buttons
+            st.markdown("<div style='margin-top: -10px; margin-bottom: 5px;'><small style='color: #a0a0a0;'>Asistente booleano (clic para insertar):</small></div>", unsafe_allow_html=True)
+            col_op1, col_op2, col_op3, col_op4, col_op5 = st.columns(5)
+            with col_op1:
+                st.button("AND", key="btn_op_and", use_container_width=True, on_click=append_operator_callback, args=("AND",))
+            with col_op2:
+                st.button("OR", key="btn_op_or", use_container_width=True, on_click=append_operator_callback, args=("OR",))
+            with col_op3:
+                st.button("NOT", key="btn_op_not", use_container_width=True, on_click=append_operator_callback, args=("NOT",))
+            with col_op4:
+                st.button("(", key="btn_op_lpar", use_container_width=True, on_click=append_operator_callback, args=("(",))
+            with col_op5:
+                st.button(")", key="btn_op_rpar", use_container_width=True, on_click=append_operator_callback, args=(")",))
+            st.caption("💡 *Ejemplo:* `(danilo OR leonel) AND NOT gobierno` *(busca menciones que contengan Danilo o Leonel, pero no gobierno)*")
 
             # Mostrar palabras clave actuales como chips interactivos
             if st.session_state.temp_client_keywords:
