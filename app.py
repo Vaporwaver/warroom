@@ -677,7 +677,7 @@ else:
 st.sidebar.markdown("---")
 
 # Monitoring Parameters
-st.sidebar.subheader("⚙️ Configuración del Motor")
+st.sidebar.markdown("### <i class='fa-solid fa-gear'></i> Configuración del Motor", unsafe_allow_html=True)
 
 # Simulation toggle
 st.session_state.force_simulation = st.sidebar.toggle(
@@ -1318,11 +1318,11 @@ def render_right_column():
     st.session_state.prev_smtp_sending = current_smtp_sending
 
     # 3. Render the metrics and logs in col_right
-    st.subheader("📊 Métricas de Medios")
+    st.markdown("### <i class='fa-solid fa-chart-simple'></i> Métricas de Medios", unsafe_allow_html=True)
     
     # Contador de noticias/contenido verificado (Instagram, RSS, YouTube, Twitter, Facebook)
     processed_counts = database.get_processed_counts()
-    st.markdown("##### 🔍 Contenido Verificado (Escaneado)")
+    st.markdown("##### <i class='fa-solid fa-circle-check'></i> Contenido Verificado (Escaneado)", unsafe_allow_html=True)
     col_v1, col_v2, col_v3, col_v4, col_v5 = st.columns(5)
     with col_v1:
         st.metric(label="📸 Instagram", value=processed_counts["instagram"])
@@ -1352,7 +1352,7 @@ def render_right_column():
     neu_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Neutral")
     neg_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Negativo")
     
-    st.markdown("##### Volumen por Canal")
+    st.markdown("##### <i class='fa-solid fa-chart-column'></i> Volumen por Canal", unsafe_allow_html=True)
     st.progress(radio_cnt / total_m if total_m > 0 else 0.0, text=f"📻 Radio ({radio_cnt})")
     st.progress(tv_cnt / total_m if total_m > 0 else 0.0, text=f"📺 TV ({tv_cnt})")
     st.progress(yt_cnt / total_m if total_m > 0 else 0.0, text=f"🎥 YouTube ({yt_cnt})")
@@ -1362,7 +1362,7 @@ def render_right_column():
     st.progress(rss_cnt / total_m if total_m > 0 else 0.0, text=f"📰 RSS ({rss_cnt})")
     
     st.markdown("---")
-    st.markdown("##### Distribución de Sentimiento")
+    st.markdown("##### <i class='fa-solid fa-heart-pulse'></i> Distribución de Sentimiento", unsafe_allow_html=True)
     st.progress(pos_cnt / total_m if total_m > 0 else 0.0, text=f"🟢 Positivo ({pos_cnt})")
     st.progress(neu_cnt / total_m if total_m > 0 else 0.0, text=f"🔵 Neutral ({neu_cnt})")
     st.progress(neg_cnt / total_m if total_m > 0 else 0.0, text=f"🔴 Negativo ({neg_cnt})")
@@ -1372,7 +1372,7 @@ def render_right_column():
         engine = st.session_state.engine
         if hasattr(engine, "uptime_status") and engine.uptime_status:
             st.markdown("---")
-            st.subheader("🟢 Uptime de Medios")
+            st.markdown("### <i class='fa-solid fa-circle-nodes'></i> Uptime de Medios", unsafe_allow_html=True)
             for name, info in sorted(engine.uptime_status.items()):
                 status = info["status"]
                 err = info["error"]
@@ -1401,7 +1401,7 @@ def render_right_column():
     st.markdown("---")
     
     # System Diagnostic Logs Panel
-    st.subheader("📝 Bitácora del Sistema")
+    st.markdown("### <i class='fa-solid fa-clock-history'></i> Bitácora del Sistema", unsafe_allow_html=True)
     with st.container(height=300):
         if not st.session_state.system_logs:
             st.caption("No hay eventos registrados en la bitácora aún. Inicia el motor para ver trazas de depuración.")
@@ -1807,7 +1807,7 @@ with col_left:
                         st.rerun()
                         
     with tab_report:
-        st.subheader("📝 Reporte Ejecutivo de Monitoreo")
+        st.markdown("### <i class='fa-solid fa-file-invoice'></i> Reporte Ejecutivo de Monitoreo", unsafe_allow_html=True)
         
         if "approved_alerts" not in st.session_state or not st.session_state.approved_alerts:
             st.info("💡 **Sin datos para reportar.** Aprueba alertas de la bandeja de validación para agregarlas al reporte diario.")
@@ -1821,7 +1821,7 @@ with col_left:
             st.success(f"✅ Tienes **{len(st.session_state.approved_alerts)}** menciones aprobadas listas en esta sesión.")
             
             # --- Section 1: AI Consolidator ---
-            st.markdown("#### 🤖 Síntesis Consolidada por IA")
+            st.markdown("#### <i class='fa-solid fa-robot'></i> Síntesis Consolidada por IA", unsafe_allow_html=True)
             
             # Button to trigger AI summary using Ollama
             if st.button("🤖 Generar Resumen por IA", use_container_width=True):
@@ -1877,7 +1877,7 @@ with col_left:
             st.markdown("---")
             
             # --- Section 2: Formats & Downloads ---
-            st.markdown("#### 📥 Descargar Reportes")
+            st.markdown("#### <i class='fa-solid fa-download'></i> Descargar Reportes", unsafe_allow_html=True)
             
             # Calculate sentiment and source counts for approved alerts
             approved_total = len(st.session_state.approved_alerts)
@@ -2041,7 +2041,7 @@ with col_left:
                     t.start()
                     st.rerun()
                  
-            st.markdown("##### Vista Previa del Reporte:")
+            st.markdown("##### <i class='fa-solid fa-magnifying-glass-chart'></i> Vista Previa del Reporte:", unsafe_allow_html=True)
             st.code(report_md, language="markdown")
              
             st.markdown("---")
@@ -2062,7 +2062,7 @@ with col_left:
                 st.rerun()
 
     with tab_face:
-        st.subheader("🔍 Módulo de Búsqueda Facial")
+        st.markdown("### <i class='fa-solid fa-face-viewfinder'></i> Módulo de Búsqueda Facial", unsafe_allow_html=True)
         st.markdown("Sube la imagen del rostro de una persona para identificarla en los clips de video locales (TV) o buscar noticias relacionadas en la Web (Google Lens / Yandex).")
         
         # Import face search module
@@ -2090,7 +2090,7 @@ with col_left:
             image_bytes = uploaded_face.getvalue()
             
             if "web" in search_type.lower():
-                st.markdown("### 🌐 Motores de Búsqueda Visuales")
+                st.markdown("### <i class='fa-solid fa-globe'></i> Motores de Búsqueda Visuales", unsafe_allow_html=True)
                 st.markdown("Usa los siguientes botones para abrir la búsqueda visual de esa persona en internet. El sistema hospeda temporalmente tu imagen de forma segura para realizar la consulta:")
                 
                 # Check if search links are already generated to avoid re-uploading on every redraw
@@ -2113,7 +2113,7 @@ with col_left:
                         st.error("No se pudo generar el enlace para Yandex Images.")
                         
                 st.markdown("---")
-                st.markdown("### 🔑 API Oficial: Google Cloud Vision")
+                st.markdown("### <i class='fa-solid fa-key'></i> API Oficial: Google Cloud Vision", unsafe_allow_html=True)
                 st.markdown("Si deseas que los resultados de búsqueda se importen directamente dentro de esta aplicación (sin redirigir al navegador), ingresa la ruta local de tu archivo de credenciales JSON de Google Cloud Service Account:")
                 
                 st.text_input(
@@ -2147,7 +2147,7 @@ with col_left:
                                 st.markdown(f"🔗 **Enlace:** [{r['url']}]({r['url']})")
                         
             else:
-                st.markdown("### 💻 Análisis de Rostros en Videoteca Local")
+                st.markdown("### <i class='fa-solid fa-desktop'></i> Análisis de Rostros en Videoteca Local", unsafe_allow_html=True)
                 st.markdown("El sistema analizará todos los clips de video de la televisión en vivo (`static/`) para buscar rostros coincidentes.")
                 
                 similarity = st.slider(
@@ -2215,7 +2215,7 @@ with col_left:
                                             st.video(video_file_path, start_time=int(m['timestamp_sec']))
 
     with tab_clients:
-        st.subheader("👥 Administración de Clientes")
+        st.markdown("### <i class='fa-solid fa-users-gear'></i> Administración de Clientes", unsafe_allow_html=True)
         st.markdown("Configura los perfiles de tus clientes, incluyendo destinatarios de correo, palabras clave y contexto para el análisis automatizado con Inteligencia Artificial.")
         
         # Load clients
@@ -2225,7 +2225,7 @@ with col_left:
         col_list, col_form = st.columns([0.45, 0.55])
         
         with col_list:
-            st.markdown("##### Clientes Registrados")
+            st.markdown("##### <i class='fa-solid fa-address-book'></i> Clientes Registrados", unsafe_allow_html=True)
             if not clients:
                 st.info("No hay clientes registrados.")
             else:
@@ -2250,7 +2250,7 @@ with col_left:
                             st.rerun()
         
         with col_form:
-            st.markdown("##### Agregar / Editar Cliente")
+            st.markdown("##### <i class='fa-solid fa-user-plus'></i> Agregar / Editar Cliente", unsafe_allow_html=True)
             
             # Option to add new or select existing to edit
             form_options = ["🆕 Agregar Nuevo Cliente"] + [f"✏️ Editar: {c['name']}" for c in clients]
