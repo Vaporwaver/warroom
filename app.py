@@ -1332,7 +1332,7 @@ def render_right_column():
             
         if new_alerts_added:
             st.session_state.should_reload = True
-            st.rerun()
+            st.rerun(scope="app")
 
     # 2. Track SMTP transitions
     if "prev_smtp_sending" not in st.session_state:
@@ -1341,7 +1341,7 @@ def render_right_column():
     current_smtp_sending = st.session_state.get("smtp_sending", False)
     if not current_smtp_sending and st.session_state.prev_smtp_sending:
         st.session_state.prev_smtp_sending = False
-        st.rerun()
+        st.rerun(scope="app")
     st.session_state.prev_smtp_sending = current_smtp_sending
 
     # 3. Render the metrics and logs in col_right
