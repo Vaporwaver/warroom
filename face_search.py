@@ -7,8 +7,9 @@ from PIL import Image
 
 def google_vision_web_detection(image_bytes, credentials_path=None):
     """
-    Queries Google Cloud Vision API's Web Detection to find pages containing matching images.
-    Returns a list of matching page titles and URLs, or an empty list if none or on error.
+    Queries Google Cloud Vision API's Web Detection to identify entities, 
+    best guesses, and pages containing matching images.
+    Returns a dictionary with 'best_guess', 'entities', 'pages', or {'error': 'msg'} on error.
     """
     try:
         from google.cloud import vision
@@ -36,18 +37,33 @@ def google_vision_web_detection(image_bytes, credentials_path=None):
         response = client.web_detection(image=image)
         web_detection = response.web_detection
         
-        results = []
+        metadata = {
+            'best_guess': "",
+            'entities': [],
+            'pages': []
+        }
+        
+        if web_detection.best_guess_labels:
+            metadata['best_guess'] = web_detection.best_guess_labels[0].label
+            
+        if web_detection.web_entities:
+            for entity in web_detection.web_entities:
+                if entity.description:
+                    metadata['entities'].append({
+                        'description': entity.description,
+                        'score': entity.score
+                    })
+                    
         if web_detection.pages_with_matching_images:
             for page in web_detection.pages_with_matching_images:
-                results.append({
+                metadata['pages'].append({
                     'url': page.url,
-                    'page_title': page.page_title or "Página de Noticia",
-                    'match_type': 'Coincidencia Visual'
+                    'page_title': page.page_title or "Página de Noticia"
                 })
-        return results
+                
+        return metadata
     except Exception as e:
-        # Return error message as a single item list to show in UI
-        return [{'error': str(e)}]
+        return {'error': str(e)}
 
 
 def get_google_lens_link(image_bytes):

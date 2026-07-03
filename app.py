@@ -2156,18 +2156,55 @@ with col_left:
                         )
                         
                     if not results:
-                        st.info("ℹ️ No se detectaron coincidencias visuales en portales de noticias o web con Google Cloud Vision API.")
-                    elif len(results) == 1 and 'error' in results[0]:
-                        st.error(f"❌ Error al consultar la API: `{results[0]['error']}`")
+                        st.info("ℹ️ No se detectaron coincidencias visuales ni entidades en portales de noticias o web con Google Cloud Vision API.")
+                    elif isinstance(results, dict) and 'error' in results:
+                        st.error(f"❌ Error al consultar la API: `{results['error']}`")
                         st.info("💡 Asegúrate de habilitar la 'Cloud Vision API' en tu consola de Google Cloud y que las credenciales del Service Account sean válidas.")
                     else:
-                        st.success(f"✅ ¡Se encontraron {len(results)} páginas web con coincidencias visuales!")
+                        best_guess = results.get('best_guess')
+                        entities = results.get('entities', [])
+                        pages = results.get('pages', [])
                         
-                        # Display results
-                        for r in results:
-                            with st.container(border=True):
-                                st.markdown(f"📰 **Título de Página:** `{r['page_title']}`")
-                                st.markdown(f"🔗 **Enlace:** [{r['url']}]({r['url']})")
+                        # 1. Sugerencia de Identificación
+                        st.markdown("#### <i class='fa-solid fa-id-card'></i> Identificación Sugerida", unsafe_allow_html=True)
+                        if best_guess:
+                            st.markdown(f"💡 **Etiqueta aproximada:** `{best_guess.title()}`")
+                            
+                        if entities:
+                            st.write("🔍 **Nombres y Entidades detectadas en la Web:**")
+                            for idx, ent in enumerate(entities[:5]):
+                                ent_name = ent['description']
+                                score_pct = int(ent['score'] * 100)
+                                col_ent_lbl, col_ent_act1, col_ent_act2 = st.columns([0.5, 0.25, 0.25])
+                                with col_ent_lbl:
+                                    st.write(f"👤 **{ent_name}** *(Similitud: {score_pct}%)*")
+                                with col_ent_act1:
+                                    search_btn_key = f"web_ent_search_{idx}_{ent_name}"
+                                    if st.button("➕ Keyword", key=search_btn_key, use_container_width=True, help="Añade este nombre a la lista temporal de palabras clave del cliente seleccionado."):
+                                        if "temp_client_keywords" not in st.session_state:
+                                            st.session_state.temp_client_keywords = []
+                                        if ent_name not in st.session_state.temp_client_keywords:
+                                            st.session_state.temp_client_keywords.append(ent_name)
+                                            st.success(f"Añadido: {ent_name}")
+                                            st.rerun()
+                                with col_ent_act2:
+                                    gnews_url = f"https://news.google.com/search?q={urllib.parse.quote(ent_name)}&hl=es-419&gl=DO&ceid=DO:es-419"
+                                    st.link_button("📰 Google News", gnews_url, use_container_width=True)
+                        else:
+                            st.warning("⚠️ No se pudieron identificar nombres o entidades específicas asociadas a este rostro en la web.")
+                            
+                        st.markdown("---")
+                        
+                        # 2. Coincidencias de páginas
+                        st.markdown("#### <i class='fa-solid fa-copy'></i> Coincidencias de la Imagen en Portales Web", unsafe_allow_html=True)
+                        if pages:
+                            st.success(f"✅ ¡Se encontraron {len(pages)} páginas web con esta foto exacta o recortada!")
+                            for r in pages:
+                                with st.container(border=True):
+                                    st.markdown(f"📰 **Título de Página:** `{r['page_title']}`")
+                                    st.markdown(f"🔗 **Enlace:** [{r['url']}]({r['url']})")
+                        else:
+                            st.info("ℹ️ No se detectaron portales de noticias o web que usen esta misma imagen.")
                         
             else:
                 st.markdown("### <i class='fa-solid fa-desktop'></i> Análisis de Rostros en Videoteca Local", unsafe_allow_html=True)
