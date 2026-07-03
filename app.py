@@ -554,14 +554,41 @@ st.sidebar.markdown("<h2 style='margin-top:0; display: flex; align-items: center
 st.sidebar.markdown("### <i class='fa-solid fa-tower-broadcast'></i> Fuentes de Monitoreo", unsafe_allow_html=True)
 col_m1, col_m2 = st.sidebar.columns(2)
 with col_m1:
-    st.toggle("📻 Radio", key="media_radio_active", on_change=save_bool_config, args=("media_radio_active", "config_media_radio_active"), disabled=st.session_state.monitoring_active)
-    st.toggle("🎥 YouTube", key="media_youtube_active", on_change=save_bool_config, args=("media_youtube_active", "config_media_youtube_active"), disabled=st.session_state.monitoring_active)
-    st.toggle("🐦 Twitter", key="media_twitter_active", on_change=save_bool_config, args=("media_twitter_active", "config_media_twitter_active"), disabled=st.session_state.monitoring_active)
-    st.toggle("📰 RSS", key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active)
+    # Radio
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-radio' style='color: #9b59b6; margin-right: 6px;'></i>Radio</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_radio_active", on_change=save_bool_config, args=("media_radio_active", "config_media_radio_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+    
+    # YouTube
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-youtube' style='color: #e74c3c; margin-right: 6px;'></i>YouTube</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_youtube_active", on_change=save_bool_config, args=("media_youtube_active", "config_media_youtube_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+    
+    # Twitter
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-x-twitter' style='color: #f1f2f6; margin-right: 6px;'></i>Twitter</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_twitter_active", on_change=save_bool_config, args=("media_twitter_active", "config_media_twitter_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+    
+    # RSS
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+
 with col_m2:
-    st.toggle("📺 TV", key="media_tv_active", on_change=save_bool_config, args=("media_tv_active", "config_media_tv_active"), disabled=st.session_state.monitoring_active)
-    st.toggle("📸 Instagram", key="media_instagram_active", on_change=save_bool_config, args=("media_instagram_active", "config_media_instagram_active"), disabled=st.session_state.monitoring_active)
-    st.toggle("📘 Facebook", key="media_facebook_active", on_change=save_bool_config, args=("media_facebook_active", "config_media_facebook_active"), disabled=st.session_state.monitoring_active)
+    # TV
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-tv' style='color: #3498db; margin-right: 6px;'></i>TV</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_tv_active", on_change=save_bool_config, args=("media_tv_active", "config_media_tv_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+    
+    # Instagram
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-instagram' style='color: #e1306c; margin-right: 6px;'></i>Instagram</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_instagram_active", on_change=save_bool_config, args=("media_instagram_active", "config_media_instagram_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+    
+    # Facebook
+    c_icon, c_toggle = st.columns([0.7, 0.3])
+    c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook</div>", unsafe_allow_html=True)
+    c_toggle.toggle("", key="media_facebook_active", on_change=save_bool_config, args=("media_facebook_active", "config_media_facebook_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
 
@@ -1353,19 +1380,38 @@ def render_right_column():
     neg_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Negativo")
     
     st.markdown("##### <i class='fa-solid fa-chart-column'></i> Volumen por Canal", unsafe_allow_html=True)
-    st.progress(radio_cnt / total_m if total_m > 0 else 0.0, text=f"📻 Radio ({radio_cnt})")
-    st.progress(tv_cnt / total_m if total_m > 0 else 0.0, text=f"📺 TV ({tv_cnt})")
-    st.progress(yt_cnt / total_m if total_m > 0 else 0.0, text=f"🎥 YouTube ({yt_cnt})")
-    st.progress(ig_cnt / total_m if total_m > 0 else 0.0, text=f"📸 Instagram ({ig_cnt})")
-    st.progress(tw_cnt / total_m if total_m > 0 else 0.0, text=f"🐦 Twitter ({tw_cnt})")
-    st.progress(fb_cnt / total_m if total_m > 0 else 0.0, text=f"📘 Facebook ({fb_cnt})")
-    st.progress(rss_cnt / total_m if total_m > 0 else 0.0, text=f"📰 RSS ({rss_cnt})")
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-radio' style='color: #9b59b6; margin-right: 6px;'></i>Radio ({radio_cnt})</div>", unsafe_allow_html=True)
+    st.progress(radio_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-tv' style='color: #3498db; margin-right: 6px;'></i>TV ({tv_cnt})</div>", unsafe_allow_html=True)
+    st.progress(tv_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-youtube' style='color: #e74c3c; margin-right: 6px;'></i>YouTube ({yt_cnt})</div>", unsafe_allow_html=True)
+    st.progress(yt_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-instagram' style='color: #e1306c; margin-right: 6px;'></i>Instagram ({ig_cnt})</div>", unsafe_allow_html=True)
+    st.progress(ig_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-x-twitter' style='color: #f1f2f6; margin-right: 6px;'></i>Twitter ({tw_cnt})</div>", unsafe_allow_html=True)
+    st.progress(tw_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook ({fb_cnt})</div>", unsafe_allow_html=True)
+    st.progress(fb_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS ({rss_cnt})</div>", unsafe_allow_html=True)
+    st.progress(rss_cnt / total_m if total_m > 0 else 0.0)
     
     st.markdown("---")
     st.markdown("##### <i class='fa-solid fa-heart-pulse'></i> Distribución de Sentimiento", unsafe_allow_html=True)
-    st.progress(pos_cnt / total_m if total_m > 0 else 0.0, text=f"🟢 Positivo ({pos_cnt})")
-    st.progress(neu_cnt / total_m if total_m > 0 else 0.0, text=f"🔵 Neutral ({neu_cnt})")
-    st.progress(neg_cnt / total_m if total_m > 0 else 0.0, text=f"🔴 Negativo ({neg_cnt})")
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-check' style='color: #2ecc71; margin-right: 6px;'></i>Positivo ({pos_cnt})</div>", unsafe_allow_html=True)
+    st.progress(pos_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-info' style='color: #3498db; margin-right: 6px;'></i>Neutral ({neu_cnt})</div>", unsafe_allow_html=True)
+    st.progress(neu_cnt / total_m if total_m > 0 else 0.0)
+    
+    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-exclamation' style='color: #e74c3c; margin-right: 6px;'></i>Negativo ({neg_cnt})</div>", unsafe_allow_html=True)
+    st.progress(neg_cnt / total_m if total_m > 0 else 0.0)
     
     # --- Media Uptime Panel ---
     if st.session_state.monitoring_active and "engine" in st.session_state and st.session_state.engine:
