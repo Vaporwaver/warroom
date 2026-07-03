@@ -14,9 +14,20 @@ def google_vision_web_detection(image_bytes, credentials_path=None):
         from google.cloud import vision
         import os
         
-        # Instantiate client with custom credentials path if provided
-        if credentials_path and os.path.exists(credentials_path):
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+        # Determine best credentials file to use
+        creds_file = credentials_path
+        if not creds_file or not os.path.exists(creds_file):
+            if os.path.exists("google_vision_creds.json"):
+                creds_file = "google_vision_creds.json"
+            else:
+                import glob
+                gen_lang_files = glob.glob("gen-lang-client-*.json")
+                if gen_lang_files:
+                    creds_file = gen_lang_files[0]
+                
+        # Instantiate client with selected credentials path if found
+        if creds_file and os.path.exists(creds_file):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.abspath(creds_file)
             client = vision.ImageAnnotatorClient()
         else:
             client = vision.ImageAnnotatorClient()

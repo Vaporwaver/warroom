@@ -25,4 +25,8 @@ static/
 
 # Google Cloud credentials
 google_vision_creds.json
+gen-lang-client-*.json
+*.mp4
+scratch/
+streamlit_error.log
 

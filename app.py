@@ -515,7 +515,16 @@ if "facebook_cookies_val" not in st.session_state:
 if "rss_feeds_val" not in st.session_state:
     st.session_state["rss_feeds_val"] = database.get_state("config_rss_feeds", DEFAULT_RSS_FEEDS)
 if "google_vision_credentials_val" not in st.session_state:
-    st.session_state["google_vision_credentials_val"] = database.get_state("config_google_vision_credentials", "")
+    saved_val = database.get_state("config_google_vision_credentials", "")
+    if not saved_val:
+        if os.path.exists("google_vision_creds.json"):
+            saved_val = "google_vision_creds.json"
+        else:
+            import glob
+            gen_lang_files = glob.glob("gen-lang-client-*.json")
+            if gen_lang_files:
+                saved_val = gen_lang_files[0]
+    st.session_state["google_vision_credentials_val"] = saved_val
 if "engine_language_val" not in st.session_state:
     st.session_state["engine_language_val"] = database.get_state("config_engine_language", "Español")
 if "engine_country_val" not in st.session_state:

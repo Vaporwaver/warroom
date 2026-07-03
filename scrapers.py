@@ -1710,7 +1710,22 @@ class RSSScraper:
     def __init__(self, feed_url, keywords):
         self.feed_url = feed_url
         self.keywords = keywords
-        self.feed_name = extract_rss_domain(feed_url)
+        
+        domain = extract_rss_domain(feed_url)
+        if "news.google.com" in feed_url:
+            import urllib.parse
+            try:
+                parsed = urllib.parse.urlparse(feed_url)
+                params = urllib.parse.parse_qs(parsed.query)
+                q_val = params.get("q", [""])[0]
+                if q_val:
+                    self.feed_name = f"Google News: {q_val}"
+                else:
+                    self.feed_name = "Google News"
+            except Exception:
+                self.feed_name = "Google News"
+        else:
+            self.feed_name = domain
 
     def scrape(self, engine=None):
         def log(msg):
@@ -2235,6 +2250,32 @@ class MonitoringEngine:
             
         # Instantiate GoogleNewsScraper if RSS is active
         if self.rss_feeds:
+            transformed_feeds = []
+            for rss in self.rss_feeds:
+                rss = rss.strip()
+                if not rss:
+                    continue
+                if not (rss.startswith("http://") or rss.startswith("https://")):
+                    import urllib.parse
+                    q = urllib.parse.quote(rss)
+                    hl, gl, ceid = "es-419", "DO", "DO:es-419"
+                    if self.language == "en":
+                        hl, gl, ceid = "en", "US", "US:en"
+                    else:
+                        if self.country == "DO":
+                            hl, gl, ceid = "es-419", "DO", "DO:es-419"
+                        elif self.country == "MX":
+                            hl, gl, ceid = "es-419", "MX", "MX:es-419"
+                        elif self.country == "ES":
+                            hl, gl, ceid = "es", "ES", "ES:es"
+                        else:
+                            hl, gl, ceid = "es-419", "US", "US:es-419"
+                    rss_url = f"https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
+                else:
+                    rss_url = rss
+                transformed_feeds.append(rss_url)
+            
+            self.rss_feeds = transformed_feeds
             self.scrapers.append(GoogleNewsScraper(keywords=self.keywords, language=self.language, country=self.country))
             for rss in self.rss_feeds:
                 self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
