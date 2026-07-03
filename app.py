@@ -2201,8 +2201,37 @@ with col_left:
                             st.success(f"✅ ¡Se encontraron {len(pages)} páginas web con esta foto exacta o recortada!")
                             for r in pages:
                                 with st.container(border=True):
-                                    st.markdown(f"📰 **Título de Página:** `{r['page_title']}`")
-                                    st.markdown(f"🔗 **Enlace:** [{r['url']}]({r['url']})")
+                                    col_p1, col_p2 = st.columns([0.75, 0.25])
+                                    with col_p1:
+                                        st.markdown(f"📰 **Título de Página:** `{r['page_title']}`")
+                                        st.markdown(f"🔗 **Enlace:** [{r['url']}]({r['url']})")
+                                    with col_p2:
+                                        import hashlib
+                                        p_hash = hashlib.sha256(r['url'].encode()).hexdigest()
+                                        btn_key = f"approve_vision_page_{p_hash}"
+                                        
+                                        # Check if already approved
+                                        is_already_approved = any(a['identifier'] == p_hash for a in st.session_state.approved_alerts)
+                                        
+                                        if is_already_approved:
+                                            st.button("✅ Aprobado", key=btn_key, disabled=True, use_container_width=True)
+                                        else:
+                                            if st.button("➕ Reporte", key=btn_key, use_container_width=True, help="Agrega este resultado como una mención aprobada en el reporte diario."):
+                                                new_alert = {
+                                                    "identifier": p_hash,
+                                                    "source": f"Búsqueda Visual ({best_guess.title()})" if best_guess else "Búsqueda Visual (Web)",
+                                                    "text": r['page_title'],
+                                                    "keywords": [best_guess] if best_guess else [],
+                                                    "timestamp": datetime.now().isoformat(),
+                                                    "sentimiento": "Neutral",
+                                                    "resumen": f"Coincidencia visual de rostro detectada en portal web: {r['url']}",
+                                                    "simulated": False,
+                                                    "metadata": {"url": r['url']}
+                                                }
+                                                database.save_alert(new_alert, client_id=st.session_state.active_client_id, status='approved')
+                                                st.session_state.should_reload_approved = True
+                                                st.success("✅ Añadida al reporte.")
+                                                st.rerun()
                         else:
                             st.info("ℹ️ No se detectaron portales de noticias o web que usen esta misma imagen.")
                         
