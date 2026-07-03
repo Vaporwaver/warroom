@@ -500,20 +500,25 @@ if "force_simulation" not in st.session_state:
 
 # Initialize persistent configuration values from database
 if "radio_channels_val" not in st.session_state:
-    st.session_state["radio_channels_val"] = database.get_state("config_radio_channels", DEFAULT_RADIO_CHANNELS)
+    saved_val = database.get_state("config_radio_channels", "")
+    st.session_state["radio_channels_val"] = saved_val if saved_val else DEFAULT_RADIO_CHANNELS
 if "tv_channels_val" not in st.session_state:
-    st.session_state["tv_channels_val"] = database.get_state("config_tv_channels", DEFAULT_TV_CHANNELS)
+    saved_val = database.get_state("config_tv_channels", "")
+    st.session_state["tv_channels_val"] = saved_val if saved_val else DEFAULT_TV_CHANNELS
 if "youtube_channels_val" not in st.session_state:
-    st.session_state["youtube_channels_val"] = database.get_state("config_youtube_channels", "https://www.youtube.com/@nuriapiera/videos")
+    saved_val = database.get_state("config_youtube_channels", "")
+    st.session_state["youtube_channels_val"] = saved_val if saved_val else "https://www.youtube.com/@nuriapiera/videos"
 if "instagram_users_val" not in st.session_state:
-    st.session_state["instagram_users_val"] = database.get_state("config_instagram_users", "nuriapiera")
+    saved_val = database.get_state("config_instagram_users", "")
+    st.session_state["instagram_users_val"] = saved_val if saved_val else "nuriapiera"
 
 if "twitter_authtoken_val" not in st.session_state:
     st.session_state["twitter_authtoken_val"] = database.get_state("config_twitter_authtoken", "")
 if "facebook_cookies_val" not in st.session_state:
     st.session_state["facebook_cookies_val"] = database.get_state("config_facebook_cookies", "")
 if "rss_feeds_val" not in st.session_state:
-    st.session_state["rss_feeds_val"] = database.get_state("config_rss_feeds", DEFAULT_RSS_FEEDS)
+    saved_val = database.get_state("config_rss_feeds", "")
+    st.session_state["rss_feeds_val"] = saved_val if saved_val else DEFAULT_RSS_FEEDS
 if "google_vision_credentials_val" not in st.session_state:
     saved_val = database.get_state("config_google_vision_credentials", "")
     if not saved_val:
