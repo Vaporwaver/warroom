@@ -2109,7 +2109,7 @@ with col_left:
 
     with tab_face:
         st.markdown("### <i class='fa-solid fa-face-viewfinder'></i> Módulo de Búsqueda Facial", unsafe_allow_html=True)
-        st.markdown("Sube la imagen del rostro de una persona para identificarla en los clips de video locales (TV) o buscar noticias relacionadas en la Web (Google Lens / Yandex).")
+        st.markdown("Sube la imagen del rostro de una persona para identificarla en los clips de video locales (TV) o buscar noticias relacionadas en la Web (Google Cloud Vision API).")
         
         # Import face search module
         import face_search
@@ -2128,7 +2128,7 @@ with col_left:
             # Options
             search_type = st.radio(
                 "Tipo de Búsqueda:",
-                ["🌐 Buscar en la Web (Google Lens / Yandex)", "💻 Buscar en Videos Locales (Base de Datos)"],
+                ["🌐 Buscar en la Web (Google Cloud Vision)", "💻 Buscar en Videos Locales (Videoteca TV)"],
                 index=0,
                 horizontal=True
             )
@@ -2136,31 +2136,8 @@ with col_left:
             image_bytes = uploaded_face.getvalue()
             
             if "web" in search_type.lower():
-                st.markdown("### <i class='fa-solid fa-globe'></i> Motores de Búsqueda Visuales", unsafe_allow_html=True)
-                st.markdown("Usa los siguientes botones para abrir la búsqueda visual de esa persona en internet. El sistema hospeda temporalmente tu imagen de forma segura para realizar la consulta:")
-                
-                # Check if search links are already generated to avoid re-uploading on every redraw
-                if "lens_link" not in st.session_state or st.session_state.get("uploaded_face_name") != uploaded_face.name:
-                    with st.spinner("Generando enlaces de búsqueda visual..."):
-                        st.session_state.lens_link = face_search.get_google_lens_link(image_bytes)
-                        st.session_state.yandex_link = face_search.get_yandex_link(image_bytes)
-                        st.session_state.uploaded_face_name = uploaded_face.name
-                
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if st.session_state.lens_link:
-                        st.link_button("🌐 Buscar Rostro en Google Lens", st.session_state.lens_link, type="primary", use_container_width=True)
-                    else:
-                        st.error("No se pudo generar el enlace para Google Lens.")
-                with col_btn2:
-                    if st.session_state.yandex_link:
-                        st.link_button("🔍 Buscar Rostro en Yandex Images", st.session_state.yandex_link, type="secondary", use_container_width=True)
-                    else:
-                        st.error("No se pudo generar el enlace para Yandex Images.")
-                        
-                st.markdown("---")
                 st.markdown("### <i class='fa-solid fa-key'></i> API Oficial: Google Cloud Vision", unsafe_allow_html=True)
-                st.markdown("Si deseas que los resultados de búsqueda se importen directamente dentro de esta aplicación (sin redirigir al navegador), ingresa la ruta local de tu archivo de credenciales JSON de Google Cloud Service Account:")
+                st.markdown("Busca noticias y páginas web que contengan imágenes coincidentes del rostro subido e importa los resultados directamente dentro de la aplicación. Ingresa la ruta local de tu archivo de credenciales JSON de Google Cloud Service Account:")
                 
                 st.text_input(
                     "Ruta al archivo JSON de credenciales:",
