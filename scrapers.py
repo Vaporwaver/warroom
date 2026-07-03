@@ -1176,7 +1176,11 @@ class TwitterScraper:
                         break
                         
                     log(f"Buscando en Twitter: '{keyword}'")
-                    url = f"https://x.com/search?q={urllib.parse.quote(keyword)}&f=live"
+                    t_q = re.compile(r'\band\b', re.IGNORECASE).sub('AND', keyword)
+                    t_q = re.compile(r'\bor\b', re.IGNORECASE).sub('OR', t_q)
+                    t_q = re.compile(r'\bnot\b', re.IGNORECASE).sub('NOT', t_q)
+                    
+                    url = f"https://x.com/search?q={urllib.parse.quote(t_q)}&f=live"
                     page.goto(url, wait_until="domcontentloaded", timeout=20000)
                     page.wait_for_timeout(3000) # Give extra time for React rendering
                     
@@ -1383,7 +1387,11 @@ class FacebookScraper:
                         break
                         
                     log(f"Buscando en Facebook: '{keyword}'")
-                    url = f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(keyword)}"
+                    fb_q = re.compile(r'\band\b', re.IGNORECASE).sub('AND', keyword)
+                    fb_q = re.compile(r'\bor\b', re.IGNORECASE).sub('OR', fb_q)
+                    fb_q = re.compile(r'\bnot\b', re.IGNORECASE).sub('NOT', fb_q)
+                    
+                    url = f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(fb_q)}"
                     page.goto(url, wait_until="domcontentloaded", timeout=20000)
                     page.wait_for_timeout(3000) # Give extra time for rendering
                     
@@ -1585,7 +1593,11 @@ class GoogleNewsScraper:
                 break
                 
             log(f"Buscando en Google News RSS: '{keyword}'")
-            q = urllib.parse.quote(keyword)
+            gnews_q = re.compile(r'\band\b', re.IGNORECASE).sub('AND', keyword)
+            gnews_q = re.compile(r'\bor\b', re.IGNORECASE).sub('OR', gnews_q)
+            gnews_q = re.compile(r'\bnot\b', re.IGNORECASE).sub('NOT', gnews_q)
+            
+            q = urllib.parse.quote(gnews_q)
             feed_url = f"https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={ceid}"
             
             try:
