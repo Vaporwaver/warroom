@@ -2405,15 +2405,29 @@ class MonitoringEngine:
                             cls_name = scraper.__class__.__name__
                             url = getattr(scraper, "tunein_url", None) or getattr(scraper, "stream_url", None)
                             media_type = "Radio" if cls_name == "RadioScraper" else ("TV" if cls_name == "TVScraper" else "Other")
-                            self.uptime_status[name] = {
-                                "status": "Offline",
-                                "last_checked": time.time(),
-                                "error": str(exc),
-                                "url": url,
-                                "type": media_type
-                            }
-                            ffmpeg_bin = get_ffmpeg_path()
-                            self.log_event(f"Error ejecutando scraper {name}: {exc} (ffmpeg: `{ffmpeg_bin}`)")
+                            
+                            exc_str = str(exc)
+                            is_not_live = "no está transmitiendo en vivo actualmente" in exc_str or "is not live" in exc_str
+                            
+                            if is_not_live:
+                                self.uptime_status[name] = {
+                                    "status": "No en vivo",
+                                    "last_checked": time.time(),
+                                    "error": exc_str,
+                                    "url": url,
+                                    "type": media_type
+                                }
+                                self.log_event(f"ℹ️ [TV] Canal {name} no está transmitiendo en vivo actualmente.")
+                            else:
+                                self.uptime_status[name] = {
+                                    "status": "Offline",
+                                    "last_checked": time.time(),
+                                    "error": exc_str,
+                                    "url": url,
+                                    "type": media_type
+                                }
+                                ffmpeg_bin = get_ffmpeg_path()
+                                self.log_event(f"Error ejecutando scraper {name}: {exc} (ffmpeg: `{ffmpeg_bin}`)")
             
             self.log_event("Ciclo de monitoreo paralelo completado. Esperando intervalo...")
             # Sleep in increments of 1 second checking stop event to remain responsive

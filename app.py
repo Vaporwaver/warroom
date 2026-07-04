@@ -44,18 +44,13 @@ Zol 106.5 FM | https://stream.zeno.fm/w6x7q7dtpy5tv"""
 
 DEFAULT_TV_CHANNELS = """Acento TV | https://acentotv01.streamprolive.com/hls/live.m3u8
 Ahora TV | https://stream.haislin.com/ahoratv/index.m3u8
-Amé (Canal 47) | https://ss2.tvrdomi.com:1936/ame47/ame47/playlist.m3u8
-Antena 7 | https://d3mhrz6vhsrmmq.cloudfront.net/index.m3u8
 Boreal Televisión | https://edge.essastream.com/borealtelevision/tracks-v1a1/mono.m3u8
 Canal del Sol | https://stream.canaldelsol.com/sol26/live_1080.m3u8
 Canal Seis | https://stream.elseis.do/canal6/live_1080.m3u8
-CDN | https://www.youtube.com/@cdn37rd/live
 Cibao Súper TV (Canal 55) | https://ss2.tvrdomi.com:1936/supertv55/supertv55/playlist.m3u8
 Cine Visión 19 | https://5790d294af2dc.streamlock.net/tvhdlive/tvhdlive/playlist.m3u8
 Color Vision | http://190.122.104.210:5080/LiveApp/streams/cvision1.m3u8
-Coral TV | https://www.youtube.com/@Coral39RD/live
 Digital Quince | http://190.122.104.210:5080/LiveApp/streams/Di15.m3u8
-El Demócrata | https://www.youtube.com/@eldemocratard/live
 El Nuevo Diario TV | https://nuevodiario01.streamprolive.com/hls/live.m3u8
 En Televisión (Canal 31) | https://stream.haislin.com/entelevision/index.m3u8
 Hilando Fino TV | https://hilandofinotv.essastream.com:3606/live/canalhilandofinotvlive.m3u8
@@ -64,19 +59,11 @@ Mia Visión | https://edge.essastream.com/miavisiontv/playlist.m3u8
 Microvisión (Canal 10) | https://streaming.telecablecentral.com.do/live/MicroHD/playlist.m3u8
 RNN | https://2-fss-2.streamhoster.com/pl_138/206532-6829902-1/playlist.m3u8
 RTVD (Canal 4) | https://protvradiostream.com:1936/canal4rd-1/ngrp:canal4rd-1_all/playlist.m3u8
-Su Mundo TV | https://www.youtube.com/@sumundotv/live
 Súper Canal | https://cnn.hostlagarto.com/supercanalhd/playlist.m3u8
-Teleantillas | https://www.youtube.com/@teleantillas10/live
 Telecentro | http://190.122.104.210:5080/LiveApp/streams/tcentro.m3u8
 Telecontacto (Canal 57) | https://streaming.grupomediosdelnorte.com:19360/telecontacto/telecontacto.m3u8
-Luna TV (Canal 25) | https://www.youtube.com/@LunaTVCanal25/live
-Telemicro | https://live4.telemicro.com.do/live/telemicrocast_1080p/playlist.m3u8
-TeleNord | https://fox.hostlagarto.com:8081/telenord8/playlist.m3u8
-Teleradioamérica | https://www.youtube.com/@canaltrard/live
-Telesistema | https://www.youtube.com/@Telesistema11rd/live
 Teleunion (Canal 16) | http://server2grupocam.com:1945/teleunion/TU/playlist.m3u8
 Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kptjeckkaa.m3u8
-Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_c0b655e0659a11f187d6955330845e08/index.fmp4.m3u8
 VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
 
 DEFAULT_RSS_FEEDS = """https://news.google.com/rss?hl=es-419&gl=US&ceid=US:es-419
@@ -854,18 +841,13 @@ Zol 106.5 FM | https://stream.zeno.fm/w6x7q7dtpy5tv"""
 
     DEFAULT_TV_CHANNELS = """Acento TV | https://acentotv01.streamprolive.com/hls/live.m3u8
 Ahora TV | https://stream.haislin.com/ahoratv/index.m3u8
-Amé (Canal 47) | https://ss2.tvrdomi.com:1936/ame47/ame47/playlist.m3u8
-Antena 7 | https://d3mhrz6vhsrmmq.cloudfront.net/index.m3u8
 Boreal Televisión | https://edge.essastream.com/borealtelevision/tracks-v1a1/mono.m3u8
 Canal del Sol | https://stream.canaldelsol.com/sol26/live_1080.m3u8
 Canal Seis | https://stream.elseis.do/canal6/live_1080.m3u8
-CDN | https://www.youtube.com/@cdn37rd/live
 Cibao Súper TV (Canal 55) | https://ss2.tvrdomi.com:1936/supertv55/supertv55/playlist.m3u8
 Cine Visión 19 | https://5790d294af2dc.streamlock.net/tvhdlive/tvhdlive/playlist.m3u8
 Color Vision | http://190.122.104.210:5080/LiveApp/streams/cvision1.m3u8
-Coral TV | https://www.youtube.com/@Coral39RD/live
 Digital Quince | http://190.122.104.210:5080/LiveApp/streams/Di15.m3u8
-El Demócrata | https://www.youtube.com/@eldemocratard/live
 El Nuevo Diario TV | https://nuevodiario01.streamprolive.com/hls/live.m3u8
 En Televisión (Canal 31) | https://stream.haislin.com/entelevision/index.m3u8
 Hilando Fino TV | https://hilandofinotv.essastream.com:3606/live/canalhilandofinotvlive.m3u8
@@ -874,19 +856,11 @@ Mia Visión | https://edge.essastream.com/miavisiontv/playlist.m3u8
 Microvisión (Canal 10) | https://streaming.telecablecentral.com.do/live/MicroHD/playlist.m3u8
 RNN | https://2-fss-2.streamhoster.com/pl_138/206532-6829902-1/playlist.m3u8
 RTVD (Canal 4) | https://protvradiostream.com:1936/canal4rd-1/ngrp:canal4rd-1_all/playlist.m3u8
-Su Mundo TV | https://www.youtube.com/@sumundotv/live
 Súper Canal | https://cnn.hostlagarto.com/supercanalhd/playlist.m3u8
-Teleantillas | https://www.youtube.com/@teleantillas10/live
 Telecentro | http://190.122.104.210:5080/LiveApp/streams/tcentro.m3u8
 Telecontacto (Canal 57) | https://streaming.grupomediosdelnorte.com:19360/telecontacto/telecontacto.m3u8
-Luna TV (Canal 25) | https://www.youtube.com/@LunaTVCanal25/live
-Telemicro | https://live4.telemicro.com.do/live/telemicrocast_1080p/playlist.m3u8
-TeleNord | https://fox.hostlagarto.com:8081/telenord8/playlist.m3u8
-Teleradioamérica | https://www.youtube.com/@canaltrard/live
-Telesistema | https://www.youtube.com/@Telesistema11rd/live
 Teleunion (Canal 16) | http://server2grupocam.com:1945/teleunion/TU/playlist.m3u8
 Teleuniverso Canal 29 | https://videoserver.tmcreativos.com:19360/kptjeckkaa/kptjeckkaa.m3u8
-Televiaducto | https://stream.castr.com/5da89a909db964293ad13301/live_c0b655e0659a11f187d6955330845e08/index.fmp4.m3u8
 VTV (Canal 32) | https://cnn.livestreaminggroup.info:3507/live/vtv32live.m3u8"""
 
     DEFAULT_RSS_FEEDS = """https://news.google.com/rss?hl=es-419&gl=US&ceid=US:es-419
@@ -1429,6 +1403,8 @@ def render_right_column():
                     status_badge = f"<span style='color:#2ecc71; font-weight:bold;'>🟢 Online</span>"
                 elif status == "Simulando":
                     status_badge = f"<span style='color:#3498db; font-weight:bold;'>🔵 Simulando</span>"
+                elif status == "No en vivo":
+                    status_badge = f"<span style='color:#f39c12; font-weight:bold;' title='{err}'>🟡 No en vivo</span>"
                 else:
                     status_badge = f"<span style='color:#e74c3c; font-weight:bold;' title='{err}'>🔴 Offline</span>"
                 
