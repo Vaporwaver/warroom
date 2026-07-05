@@ -409,6 +409,10 @@ class RadioScraper:
                 cmd += ["-user_agent", user_agent]
                 
             cmd += [
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                "-timeout", "10000000",
                 "-i", stream_url, "-t", str(self.duration),
                 "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", temp_audio
             ]
@@ -2007,8 +2011,12 @@ class TVScraper:
                 cmd_video += ["-user_agent", user_agent]
                 
             cmd_video += [
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                "-timeout", "10000000",
                 "-i", resolved_url, "-t", str(self.duration),
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                "-c:v", "copy",
                 "-c:a", "aac", "-ac", "1", "-ar", "16000", temp_video
             ]
             
