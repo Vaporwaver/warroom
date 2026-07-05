@@ -308,15 +308,60 @@ def get_whisper_model(model_name="tiny"):
             _whisper_model_instance = whisper.load_model(model_name)
         return _whisper_model_instance
 
+def transcribe_audio(audio_path, whisper_model_name="tiny", language_code="es", api_mode="Local (Whisper)", credentials_path=None):
+    """
+    Transcribes audio using either local Whisper or Google Cloud Speech-to-Text.
+    """
+    if "cloud" in api_mode.lower() or "google" in api_mode.lower():
+        try:
+            from google.cloud import speech
+            import os
+            
+            if credentials_path and os.path.exists(credentials_path):
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
+                
+            client = speech.SpeechClient()
+            
+            with open(audio_path, 'rb') as audio_file:
+                content = audio_file.read()
+                
+            audio = speech.RecognitionAudio(content=content)
+            
+            gcp_lang_map = {"es": "es-ES", "en": "en-US"}
+            gcp_lang = gcp_lang_map.get(language_code, "es-ES")
+            
+            config = speech.RecognitionConfig(
+                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+                sample_rate_hertz=16000,
+                language_code=gcp_lang,
+            )
+            
+            response = client.recognize(config=config, audio=audio)
+            text = ""
+            for result in response.results:
+                text += result.alternatives[0].transcript + " "
+            return text.strip()
+        except Exception:
+            # Fallback to local whisper on error
+            pass
+            
+    model = get_whisper_model(whisper_model_name)
+    with _whisper_transcription_lock:
+        transcription = model.transcribe(audio_path, language=language_code, fp16=(model.device.type == "cuda"))
+    return transcription.get("text", "")
+
+
 # --- Radio Scraper ---
 class RadioScraper:
-    def __init__(self, name, tunein_url, keywords, duration=30, whisper_model="tiny", language="es"):
+    def __init__(self, name, tunein_url, keywords, duration=30, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
         self.name = name
         self.tunein_url = tunein_url
         self.keywords = keywords
         self.duration = duration
         self.whisper_model_name = whisper_model
         self.language = language
+        self.transcription_mode = transcription_mode
+        self.credentials_path = credentials_path
 
     def scrape(self):
         import tempfile
@@ -382,11 +427,14 @@ class RadioScraper:
             if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) == 0:
                 raise RuntimeError("FFmpeg generated an empty or non-existent audio file")
                 
-            # 3. Transcribe with Whisper
-            model = get_whisper_model(self.whisper_model_name)
-            with _whisper_transcription_lock:
-                transcription = model.transcribe(temp_audio, language=self.language, fp16=(model.device.type == "cuda"))
-            text = transcription.get("text", "")
+            # 3. Transcribe
+            text = transcribe_audio(
+                audio_path=temp_audio,
+                whisper_model_name=self.whisper_model_name,
+                language_code=self.language,
+                api_mode=self.transcription_mode,
+                credentials_path=self.credentials_path
+            )
             
             # 4. Keyword Match
             found_kws = contains_keywords(text, self.keywords)
@@ -455,11 +503,13 @@ class RadioScraper:
 
 # --- YouTube Scraper ---
 class YouTubeScraper:
-    def __init__(self, channel_url, keywords, language="es"):
+    def __init__(self, channel_url, keywords, language="es", transcription_mode="Local (Whisper)", credentials_path=None):
         self.channel_url = normalize_youtube_channel_url(channel_url)
         self.keywords = keywords
         self.channel_name = extract_youtube_channel_name(self.channel_url)
         self.language = language
+        self.transcription_mode = transcription_mode
+        self.credentials_path = credentials_path
 
     def scrape(self, engine=None):
         def log(msg):
@@ -681,13 +731,16 @@ class YouTubeScraper:
                         if result.returncode != 0:
                             raise RuntimeError(f"FFmpeg falló: {clean_ffmpeg_error(result.stderr)}")
                             
-                        # 3. Transcribe with Whisper
-                        log(f"Transcribiendo audio localmente con Whisper para {video_id}...")
+                        # 3. Transcribe
+                        log(f"Transcribiendo audio para {video_id}...")
                         model_name = engine.whisper_model if (engine and hasattr(engine, 'whisper_model')) else "tiny"
-                        model = get_whisper_model(model_name)
-                        with _whisper_transcription_lock:
-                            transcription = model.transcribe(wav_audio_path, language=self.language, fp16=(model.device.type == "cuda"))
-                        full_text = transcription.get("text", "")
+                        full_text = transcribe_audio(
+                            audio_path=wav_audio_path,
+                            whisper_model_name=model_name,
+                            language_code=self.language,
+                            api_mode=self.transcription_mode,
+                            credentials_path=self.credentials_path
+                        )
                         
                         # 4. Search keywords and build context using Whisper segment timestamps
                         found_kws = contains_keywords(full_text, self.keywords)
@@ -1875,13 +1928,15 @@ class RSSScraper:
 
 # --- TV Scraper ---
 class TVScraper:
-    def __init__(self, name, stream_url, keywords, duration=20, whisper_model="tiny", language="es"):
+    def __init__(self, name, stream_url, keywords, duration=20, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
         self.name = name
         self.stream_url = stream_url
         self.keywords = keywords
         self.duration = duration
         self.whisper_model_name = whisper_model
         self.language = language
+        self.transcription_mode = transcription_mode
+        self.credentials_path = credentials_path
 
     def scrape(self):
         import tempfile
@@ -1970,11 +2025,14 @@ class TVScraper:
             if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) == 0:
                 raise RuntimeError("Failed to extract audio track from video clip")
                 
-            # 3. Transcribe with Whisper
-            model = get_whisper_model(self.whisper_model_name)
-            with _whisper_transcription_lock:
-                transcription = model.transcribe(temp_audio, language=self.language, fp16=(model.device.type == "cuda"))
-            text = transcription.get("text", "")
+            # 3. Transcribe
+            text = transcribe_audio(
+                audio_path=temp_audio,
+                whisper_model_name=self.whisper_model_name,
+                language_code=self.language,
+                api_mode=self.transcription_mode,
+                credentials_path=self.credentials_path
+            )
             
             if os.path.exists(temp_audio):
                 try: os.remove(temp_audio)
@@ -2045,39 +2103,92 @@ class TVScraper:
 
 # --- AI Ollama Analyzer ---
 class OllamaAnalyzer:
-    def __init__(self, model_name="gemma4:e2b"):
+    def __init__(self, model_name="gemma4:e2b", api_mode="Local (Ollama/Gemma)", credentials_path=None, api_key=None):
         self.model_name = model_name
+        self.api_mode = api_mode
+        self.credentials_path = credentials_path
+        self.api_key = api_key
+
+    def generate_text(self, system_prompt, prompt_text):
+        """
+        Generates text using the selected API mode (Ollama, Vertex AI, or Generative AI Developer API).
+        """
+        api_mode_lower = self.api_mode.lower()
+        
+        if "vertex" in api_mode_lower or "cloud" in api_mode_lower:
+            # Google Cloud Vertex AI Gemini
+            try:
+                import vertexai
+                from vertexai.generative_models import GenerativeModel
+                import json
+                import os
+                
+                if self.credentials_path and os.path.exists(self.credentials_path):
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.credentials_path
+                    with open(self.credentials_path, 'r') as f:
+                        creds = json.load(f)
+                        project_id = creds.get("project_id")
+                else:
+                    project_id = None
+                    
+                vertexai.init(project=project_id, location="us-central1")
+                model = GenerativeModel("gemini-1.5-flash")
+                
+                combined_prompt = f"{system_prompt}\n\n{prompt_text}"
+                response = model.generate_content(combined_prompt)
+                return response.text
+            except Exception as e:
+                raise RuntimeError(f"Vertex AI Gemini failed: {str(e)}")
+                
+        elif "api key" in api_mode_lower or "generative" in api_mode_lower or "developer" in api_mode_lower:
+            # Google Generative AI (Developer API Key)
+            try:
+                import google.generativeai as genai
+                
+                genai.configure(api_key=self.api_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                
+                combined_prompt = f"{system_prompt}\n\n{prompt_text}"
+                response = model.generate_content(combined_prompt)
+                return response.text
+            except Exception as e:
+                raise RuntimeError(f"Gemini API Key failed: {str(e)}")
+                
+        else:
+            # Local Ollama
+            try:
+                import ollama
+                client = ollama.Client(host='http://localhost:11434', timeout=30.0)
+                response = client.chat(
+                    model=self.model_name,
+                    messages=[
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': prompt_text}
+                    ]
+                )
+                return response['message']['content']
+            except Exception as e:
+                raise RuntimeError(f"Ollama local failed: {str(e)}")
 
     def analyze(self, text):
         try:
-            import ollama
-            client = ollama.Client(host='http://localhost:11434', timeout=10.0)
-            
-            prompt = (
+            system_prompt = (
                 "Eres un analista de PR. Lee este texto extraído de un medio dominicano. "
                 "Extrae el sentimiento general (Positivo, Negativo o Neutral) y escribe un resumen estrictamente de una sola línea. "
                 "Devuelve el resultado en formato JSON con las claves: 'sentimiento' y 'resumen'."
             )
             
-            response = client.chat(
-                model=self.model_name,
-                messages=[
-                    {'role': 'system', 'content': prompt},
-                    {'role': 'user', 'content': text}
-                ]
-            )
-            
-            content = response['message']['content']
+            content = self.generate_text(system_prompt, text)
             parsed_json = self._parse_json(content)
             parsed_json["ai_analyzed"] = True
-            parsed_json["model_used"] = self.model_name
+            parsed_json["model_used"] = "Gemini" if "local" not in self.api_mode.lower() else self.model_name
             return parsed_json
             
         except Exception as e:
             # Connect fallback rules on failure
             result = self._analyze_fallback(text)
             result["ai_analyzed"] = False
-            result["diagnostic"] = f"Ollama failed ({type(e).__name__}: {str(e)})."
+            result["diagnostic"] = f"AI Analysis failed ({type(e).__name__}: {str(e)})."
             return result
 
     def _parse_json(self, response_text):
@@ -2211,7 +2322,7 @@ def clean_html_text(raw_html):
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO"):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO", transcription_mode="Local (Whisper)", ai_mode="Local (Ollama/Gemma)", google_vision_credentials=None, google_gemini_api_key=None):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -2223,6 +2334,10 @@ class MonitoringEngine:
         self.uptime_status = {}
         self.language = language
         self.country = country
+        self.transcription_mode = transcription_mode
+        self.ai_mode = ai_mode
+        self.google_vision_credentials = google_vision_credentials
+        self.google_gemini_api_key = google_gemini_api_key
         
         self.twitter_active = twitter_active if twitter_active is not None else False
         self.facebook_active = facebook_active if facebook_active is not None else False
@@ -2246,9 +2361,9 @@ class MonitoringEngine:
         # Instantiate Scrapers
         self.scrapers = []
         for r in self.radio_channels:
-            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language))
+            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
         for yt in self.youtube_channels:
-            self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language))
+            self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
         for ig in self.instagram_channels:
             self.scrapers.append(InstagramScraper(username=ig, keywords=self.keywords, sessionid=self.instagram_sessionid))
             
@@ -2292,9 +2407,9 @@ class MonitoringEngine:
             for rss in self.rss_feeds:
                 self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:
-            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language))
+            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
             
-        self.analyzer = OllamaAnalyzer(self.ollama_model)
+        self.analyzer = OllamaAnalyzer(self.ollama_model, api_mode=self.ai_mode, credentials_path=self.google_vision_credentials, api_key=self.google_gemini_api_key)
 
     def log_event(self, message):
         log_time = time.strftime("%H:%M:%S")

@@ -517,6 +517,12 @@ if "google_vision_credentials_val" not in st.session_state:
             if gen_lang_files:
                 saved_val = gen_lang_files[0]
     st.session_state["google_vision_credentials_val"] = saved_val
+if "engine_transcription_mode_val" not in st.session_state:
+    st.session_state["engine_transcription_mode_val"] = database.get_state("config_engine_transcription_mode", "Local (Whisper)")
+if "engine_ai_mode_val" not in st.session_state:
+    st.session_state["engine_ai_mode_val"] = database.get_state("config_engine_ai_mode", "Local (Ollama/Gemma)")
+if "google_gemini_api_key_val" not in st.session_state:
+    st.session_state["google_gemini_api_key_val"] = database.get_state("config_google_gemini_api_key", "")
 if "engine_language_val" not in st.session_state:
     st.session_state["engine_language_val"] = database.get_state("config_engine_language", "Español")
 if "engine_country_val" not in st.session_state:
@@ -678,7 +684,11 @@ if not st.session_state.monitoring_active:
             twitter_authtoken=st.session_state.get("twitter_authtoken_val", ""),
             facebook_cookies=st.session_state.get("facebook_cookies_val", ""),
             language=lang_code,
-            country=country_code
+            country=country_code,
+            transcription_mode=st.session_state.get("engine_transcription_mode_val", "Local (Whisper)"),
+            ai_mode=st.session_state.get("engine_ai_mode_val", "Local (Ollama/Gemma)"),
+            google_vision_credentials=st.session_state.get("google_vision_credentials_val", ""),
+            google_gemini_api_key=st.session_state.get("google_gemini_api_key_val", "")
         )
         st.session_state.engine.start()
         st.session_state.monitoring_active = True
@@ -734,13 +744,44 @@ st.sidebar.selectbox(
 )
 
 st.sidebar.selectbox(
+    "Motor de Transcripción",
+    options=["Local (Whisper)", "Google Cloud Speech-to-Text"],
+    key="engine_transcription_mode_val",
+    disabled=st.session_state.monitoring_active,
+    on_change=save_config,
+    args=("engine_transcription_mode_val", "config_engine_transcription_mode"),
+    help="Selecciona el servicio para convertir audio a texto."
+)
+
+st.sidebar.selectbox(
     "Modelo Whisper (Audio local)",
     options=["tiny", "base"],
     index=0,
     key="whisper_model_val",
-    disabled=st.session_state.monitoring_active or st.session_state.force_simulation,
+    disabled=st.session_state.monitoring_active or st.session_state.force_simulation or st.session_state.engine_transcription_mode_val != "Local (Whisper)",
     help="Modelos más pesados incrementan el uso de CPU/RAM."
 )
+
+st.sidebar.selectbox(
+    "Motor de Análisis IA",
+    options=["Local (Ollama/Gemma)", "Google Cloud Gemini (Vertex AI)", "Google Gemini (API Key)"],
+    key="engine_ai_mode_val",
+    disabled=st.session_state.monitoring_active,
+    on_change=save_config,
+    args=("engine_ai_mode_val", "config_engine_ai_mode"),
+    help="Selecciona el motor de inteligencia artificial para resúmenes y análisis."
+)
+
+if st.session_state.engine_ai_mode_val == "Google Gemini (API Key)":
+    st.sidebar.text_input(
+        "Google Gemini API Key",
+        type="password",
+        key="google_gemini_api_key_val",
+        disabled=st.session_state.monitoring_active,
+        on_change=save_config,
+        args=("google_gemini_api_key_val", "config_google_gemini_api_key"),
+        help="Ingresa tu clave de API de Gemini Developer (de Google AI Studio)."
+    )
 
 # Fetch active models for selection if Ollama is running
 ollama_options = ["gemma4:e2b", "gemma4:e4b", "gemma:2b", "gemma:7b"]
@@ -754,7 +795,7 @@ st.sidebar.selectbox(
     options=ollama_options,
     index=0,
     key="ollama_model_val",
-    disabled=st.session_state.monitoring_active,
+    disabled=st.session_state.monitoring_active or st.session_state.engine_ai_mode_val != "Local (Ollama/Gemma)",
     help="Modelo local de Ollama cargado a través de localhost:11434"
 )
 
@@ -1869,19 +1910,24 @@ with col_left:
                     )
                     
                     try:
-                        # Call Ollama local
                         import scrapers
-                        analyzer = scrapers.OllamaAnalyzer(st.session_state.get("ollama_model_val", "gemma4:e2b"))
-                        import ollama
-                        client = ollama.Client(host='http://localhost:11434', timeout=30.0)
-                        response = client.chat(
-                            model=analyzer.model_name,
-                            messages=[
-                                {'role': 'system', 'content': 'Eres un analista de PR que redacta reportes consolidados corporativos.'},
-                                {'role': 'user', 'content': prompt}
-                            ]
+                        
+                        api_mode = st.session_state.get("engine_ai_mode_val", "Local (Ollama/Gemma)")
+                        creds_path = st.session_state.get("google_vision_credentials_val", "")
+                        gemini_key = st.session_state.get("google_gemini_api_key_val", "")
+                        
+                        analyzer = scrapers.OllamaAnalyzer(
+                            model_name=st.session_state.get("ollama_model_val", "gemma4:e2b"),
+                            api_mode=api_mode,
+                            credentials_path=creds_path,
+                            api_key=gemini_key
                         )
-                        st.session_state.ai_summary_report = response['message']['content']
+                        
+                        summary = analyzer.generate_text(
+                            system_prompt='Eres un analista de PR que redacta reportes consolidados corporativos.',
+                            prompt_text=prompt
+                        )
+                        st.session_state.ai_summary_report = summary
                     except Exception as e:
                         # Fallback heuristic summary
                         pos_c = sum(1 for a in st.session_state.approved_alerts if a["sentimiento"] == "Positivo")
