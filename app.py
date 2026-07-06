@@ -2198,12 +2198,49 @@ with col_left:
                         
                         # 1. Sugerencia de Identificación
                         st.markdown("#### <i class='fa-solid fa-id-card'></i> Identificación Sugerida", unsafe_allow_html=True)
+                        # Función estricta para filtrar solo nombres propios válidos de personas (evitar tags genéricos)
+                        def is_valid_proper_name(text):
+                            if not text:
+                                return False
+                            text_clean = text.strip()
+                            text_lower = text_clean.lower()
+                            
+                            # Palabras clave genéricas que no corresponden al nombre de una persona
+                            blacklist = [
+                                "girl", "boy", "man", "woman", "music", "song", "album", "video", 
+                                "official", "trailer", "lyrics", "youtube", "facebook", "instagram", 
+                                "dailymotion", "spotify", "audio", "single", "country music", "pop music",
+                                "singer", "artist", "band", "concert", "genre", "rock", "pop", "rap", 
+                                "soundtrack", "vevo", "channel", "playlist", "theme", "karaoke", "home", 
+                                "inicio", "página", "noticia", "site", "web", "chicas", "chicos", "mujer", 
+                                "hombre", "música", "canción", "video oficial", "letras", "película", "trailer oficial"
+                            ]
+                            for word in blacklist:
+                                if word == text_lower or f" {word} " in f" {text_lower} ":
+                                    return False
+                                    
+                            words = text_clean.split()
+                            # Los nombres de personas suelen tener entre 2 y 4 palabras (ej: 'Ligia Bonetti')
+                            if len(words) < 2 or len(words) > 4:
+                                return False
+                                
+                            # Todas las palabras deben comenzar con mayúscula (excepto conectores estándar)
+                            connectors = ["de", "del", "la", "y", "in", "on", "at", "by", "of", "and", "the"]
+                            for w in words:
+                                if w.lower() not in connectors:
+                                    if not w[0].isupper():
+                                        return False
+                            return True
+
+                        # Filtrar las entidades generales usando la función
+                        filtered_entities = [ent for ent in entities if is_valid_proper_name(ent.get('description', ''))]
+                        
                         if best_guess:
                             st.markdown(f"💡 **Etiqueta aproximada:** `{best_guess.title()}`")
                             
-                        if entities:
+                        if filtered_entities:
                             st.write("🔍 **Nombres y Entidades detectadas en la Web:**")
-                            for idx, ent in enumerate(entities[:5]):
+                            for idx, ent in enumerate(filtered_entities[:5]):
                                 ent_name = ent['description']
                                 score_pct = int(ent['score'] * 100)
                                 col_ent_lbl, col_ent_act1, col_ent_act2 = st.columns([0.5, 0.25, 0.25])
@@ -2242,10 +2279,8 @@ with col_left:
                             if title:
                                 parts = re.split(r'\s*[\|\-–—:]\s*', title)
                                 first_part = parts[0].strip()
-                                if first_part and len(first_part) > 2 and len(first_part) < 50:
-                                    # Excluir títulos muy comunes o genéricos
-                                    if first_part.lower() not in ["rock", "girl", "official uk trailer", "just girls being girls", "página de noticia", "home", "inicio"]:
-                                        title_suggestions.append(first_part)
+                                if is_valid_proper_name(first_part):
+                                    title_suggestions.append(first_part)
                                         
                         unique_title_sugs = []
                         for sug in title_suggestions:
