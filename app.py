@@ -555,37 +555,37 @@ st.sidebar.markdown("### <i class='fa-solid fa-tower-broadcast'></i> Fuentes de 
 # Radio
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-radio' style='color: #9b59b6; margin-right: 6px;'></i>Radio</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_radio_active", on_change=save_bool_config, args=("media_radio_active", "config_media_radio_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_radio_active", True), key="media_radio_active", on_change=save_bool_config, args=("media_radio_active", "config_media_radio_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 # TV
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-tv' style='color: #3498db; margin-right: 6px;'></i>TV</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_tv_active", on_change=save_bool_config, args=("media_tv_active", "config_media_tv_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_tv_active", True), key="media_tv_active", on_change=save_bool_config, args=("media_tv_active", "config_media_tv_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 # YouTube
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-youtube' style='color: #e74c3c; margin-right: 6px;'></i>YouTube</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_youtube_active", on_change=save_bool_config, args=("media_youtube_active", "config_media_youtube_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_youtube_active", True), key="media_youtube_active", on_change=save_bool_config, args=("media_youtube_active", "config_media_youtube_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 # Instagram
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-instagram' style='color: #e1306c; margin-right: 6px;'></i>Instagram</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_instagram_active", on_change=save_bool_config, args=("media_instagram_active", "config_media_instagram_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_instagram_active", True), key="media_instagram_active", on_change=save_bool_config, args=("media_instagram_active", "config_media_instagram_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 # Twitter
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-x-twitter' style='color: #f1f2f6; margin-right: 6px;'></i>Twitter</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_twitter_active", on_change=save_bool_config, args=("media_twitter_active", "config_media_twitter_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_twitter_active", True), key="media_twitter_active", on_change=save_bool_config, args=("media_twitter_active", "config_media_twitter_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 # Facebook
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_facebook_active", on_change=save_bool_config, args=("media_facebook_active", "config_media_facebook_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_facebook_active", True), key="media_facebook_active", on_change=save_bool_config, args=("media_facebook_active", "config_media_facebook_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 # RSS
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS</div>", unsafe_allow_html=True)
-c_toggle.toggle("", key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_toggle.toggle("", value=st.session_state.get("media_rss_active", True), key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
 
