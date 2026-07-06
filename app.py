@@ -2211,13 +2211,23 @@ with col_left:
                                     st.write(f"👤 **{ent_name}** *(Similitud: {score_pct}%)*")
                                 with col_ent_act1:
                                     search_btn_key = f"web_ent_search_{idx}_{ent_name}"
-                                    if st.button("➕ Keyword", key=search_btn_key, use_container_width=True, help="Añade este nombre a la lista temporal de palabras clave del cliente seleccionado."):
-                                        if "temp_client_keywords" not in st.session_state:
-                                            st.session_state.temp_client_keywords = []
-                                        if ent_name not in st.session_state.temp_client_keywords:
-                                            st.session_state.temp_client_keywords.append(ent_name)
-                                            st.success(f"Añadido: {ent_name}")
-                                            st.rerun()
+                                    if st.button("➕ Keyword", key=search_btn_key, use_container_width=True, help="Añade este nombre directamente a las palabras clave del cliente activo."):
+                                        if active_client:
+                                            current_kws = [k.strip() for k in active_client.get("keywords", "").split(",") if k.strip()]
+                                            if ent_name not in current_kws:
+                                                current_kws.append(ent_name)
+                                                new_keywords_str = ", ".join(current_kws)
+                                                database.save_client(
+                                                    client_id=active_client["id"],
+                                                    name=active_client["name"],
+                                                    email=active_client["email"],
+                                                    keywords=new_keywords_str,
+                                                    description=active_client["description"]
+                                                )
+                                                st.toast(f"🎉 ¡'{ent_name}' agregado a las palabras clave de '{active_client['name']}'!", icon="✅")
+                                                st.rerun()
+                                            else:
+                                                st.info(f"ℹ️ '{ent_name}' ya está en las palabras clave de '{active_client['name']}'.")
                                 with col_ent_act2:
                                     gnews_url = f"https://news.google.com/search?q={urllib.parse.quote(ent_name)}&hl=es-419&gl=DO&ceid=DO:es-419"
                                     st.link_button("📰 Google News", gnews_url, use_container_width=True)
@@ -2250,13 +2260,23 @@ with col_left:
                                     st.write(f"👤 **{name}** *(Desde título de página)*")
                                 with col_sug_act1:
                                     sug_btn_key = f"web_sug_search_{idx}_{name}"
-                                    if st.button("➕ Keyword", key=sug_btn_key, use_container_width=True, help="Añade este nombre a la lista temporal de palabras clave del cliente seleccionado."):
-                                        if "temp_client_keywords" not in st.session_state:
-                                            st.session_state.temp_client_keywords = []
-                                        if name not in st.session_state.temp_client_keywords:
-                                            st.session_state.temp_client_keywords.append(name)
-                                            st.success(f"Añadido: {name}")
-                                            st.rerun()
+                                    if st.button("➕ Keyword", key=sug_btn_key, use_container_width=True, help="Añade este nombre directamente a las palabras clave del cliente activo."):
+                                        if active_client:
+                                            current_kws = [k.strip() for k in active_client.get("keywords", "").split(",") if k.strip()]
+                                            if name not in current_kws:
+                                                current_kws.append(name)
+                                                new_keywords_str = ", ".join(current_kws)
+                                                database.save_client(
+                                                    client_id=active_client["id"],
+                                                    name=active_client["name"],
+                                                    email=active_client["email"],
+                                                    keywords=new_keywords_str,
+                                                    description=active_client["description"]
+                                                )
+                                                st.toast(f"🎉 ¡'{name}' agregado a las palabras clave de '{active_client['name']}'!", icon="✅")
+                                                st.rerun()
+                                            else:
+                                                st.info(f"ℹ️ '{name}' ya está en las palabras clave de '{active_client['name']}'.")
                                 with col_sug_act2:
                                     gnews_url = f"https://news.google.com/search?q={urllib.parse.quote(name)}&hl=es-419&gl=DO&ceid=DO:es-419"
                                     st.link_button("📰 Google News", gnews_url, use_container_width=True)
