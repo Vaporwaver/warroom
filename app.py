@@ -26,7 +26,7 @@ Fidelity (94.1) | https://autodiscover.fidelityfm.com.do/fid
 Independencia (93.3) | https://stream.radiojar.com/nc893hafc8zuv
 La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
 La Bakana (105.7) | https://stream.zeno.fm/eym18zp7cyptv
-La Nota Diferente | https://tunein.com/radio/La-Nota-957-FM-s256372/
+La Nota Diferente | https://servidor27-5.brlogic.com:7062/live
 La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
 La Voz FF.AA. (HIFA) | https://rs2.radiordomi.com/8412/stream/1/
 La X 102.1 | https://audio.livecastnet.com:2535/stream
@@ -170,7 +170,7 @@ def send_email_report_thread(config, report_md, csv_data, ai_summary, override_t
                     <p style="margin: 5px 0 0 0;">{ai_summary or "Consulte el archivo Markdown adjunto para ver la síntesis ejecutiva consolidada."}</p>
                 </div>
                 
-                <p>El reporte incluye el desglose detallado de las menciones aprobadas de Radio, TV, YouTube, Instagram y RSS, así como sus estadísticas de cobertura y sentimiento correspondientes.</p>
+                <p>El reporte incluye el desglose detallado de las menciones aprobadas de Radio, TV, YouTube, Instagram y Medios Digitales, así como sus estadísticas de cobertura y sentimiento correspondientes.</p>
                 
                 <div class="footer">
                     Este es un reporte automático del sistema <strong>War Room Monitoreo</strong>.<br/>
@@ -584,7 +584,7 @@ c_toggle.toggle("", value=st.session_state.get("media_facebook_active", True), k
 
 # RSS
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
-c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS</div>", unsafe_allow_html=True)
+c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>Medios Digitales</div>", unsafe_allow_html=True)
 c_toggle.toggle("", value=st.session_state.get("media_rss_active", True), key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -864,7 +864,7 @@ Fidelity (94.1) | https://autodiscover.fidelityfm.com.do/fid
 Independencia (93.3) | https://stream.radiojar.com/nc893hafc8zuv
 La 91 FM | https://stream.zeno.fm/859cd7buqg8uv
 La Bakana (105.7) | https://stream.zeno.fm/eym18zp7cyptv
-La Nota Diferente | https://tunein.com/radio/La-Nota-957-FM-s256372/
+La Nota Diferente | https://servidor27-5.brlogic.com:7062/live
 La Nueva 106.9 | https://lanueva106.radioca.st/stream/1/
 La Voz FF.AA. (HIFA) | https://rs2.radiordomi.com/8412/stream/1/
 La X 102.1 | https://audio.livecastnet.com:2535/stream
@@ -949,11 +949,11 @@ https://eldinero.com.do/feed/"""
         )
     if st.session_state.get("media_rss_active", True):
         st.sidebar.text_area(
-            "Feeds RSS (URLs)",
+            "Medios Digitales (URLs de Feeds RSS)",
             key="rss_feeds_val",
             on_change=save_config,
             args=("rss_feeds_val", "config_rss_feeds"),
-            help="Ingresa una URL de feed RSS por línea."
+            help="Ingresa una URL de feed RSS o medio digital por línea."
         )
 else:
     st.sidebar.info(f"🔍 **Buscando:** `{st.session_state.get('keywords_str', '')}`")
@@ -1373,7 +1373,7 @@ def render_right_column():
     with col_v1:
         st.metric(label="📸 Instagram", value=processed_counts["instagram"])
     with col_v2:
-        st.metric(label="📰 RSS", value=processed_counts["rss"])
+        st.metric(label="📰 Medios Digitales", value=processed_counts["rss"])
     with col_v3:
         st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
     with col_v4:
@@ -1417,7 +1417,7 @@ def render_right_column():
     st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook ({fb_cnt})</div>", unsafe_allow_html=True)
     st.progress(fb_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS ({rss_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>Medios Digitales ({rss_cnt})</div>", unsafe_allow_html=True)
     st.progress(rss_cnt / total_m if total_m > 0 else 0.0)
     
     st.markdown("---")
@@ -1597,7 +1597,7 @@ with col_left:
                     key="selected_keywords_val"
                 )
             with col_f2:
-                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], key="selected_media_val")
+                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], key="selected_media_val")
             with col_f3:
                 # Find all sources in the alerts cache
                 all_sources = list(set([a["source"] for a in st.session_state.alerts]))
@@ -1621,7 +1621,7 @@ with col_left:
                                 matching_sources.append(src)
                             elif "Facebook" in m_type and "facebook" in src_lower:
                                 matching_sources.append(src)
-                            elif "RSS" in m_type and "rss" in src_lower:
+                            elif ("RSS" in m_type or "Medios Digitales" in m_type) and "rss" in src_lower:
                                 matching_sources.append(src)
                 matching_sources = sorted(list(set(matching_sources)))
                 selected_sources = st.multiselect("Fuente/Canal", options=matching_sources, default=matching_sources, key="selected_sources_val")
@@ -1658,7 +1658,7 @@ with col_left:
                             media_type_match = True
                         elif "Facebook" in m_type and "facebook" in source_lower:
                             media_type_match = True
-                        elif "RSS" in m_type and "rss" in source_lower:
+                        elif ("RSS" in m_type or "Medios Digitales" in m_type) and "rss" in source_lower:
                             media_type_match = True
                         
                 if keyword_match and source_match and sentiment_match and media_type_match:
@@ -1989,7 +1989,7 @@ with col_left:
             report_md += f"- **📸 Instagram:** {app_ig} menciones\n"
             report_md += f"- **🐦 Twitter:** {app_tw} menciones\n"
             report_md += f"- **📘 Facebook:** {app_fb} menciones\n"
-            report_md += f"- **📰 RSS:** {app_rss} menciones\n\n"
+            report_md += f"- **📰 Medios Digitales:** {app_rss} menciones\n\n"
             report_md += "---\n\n"
             
             if st.session_state.get("ai_summary_report"):

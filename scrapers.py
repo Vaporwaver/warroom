@@ -351,9 +351,9 @@ def transcribe_audio(audio_path, whisper_model_name="tiny", language_code="es", 
     return transcription.get("text", "")
 
 
-def concat_media_files(file_list, output_path):
+def concat_media_files(file_list, output_path, is_video=True):
     """
-    Concatenates multiple audio/video files using FFmpeg's concat demuxer.
+    Concatenates multiple audio/video files using FFmpeg's concat demuxer with re-encoding to prevent PTS/sync issues.
     """
     import subprocess
     import tempfile
@@ -368,8 +368,11 @@ def concat_media_files(file_list, output_path):
     if not valid_files:
         return False
     if len(valid_files) == 1:
-        shutil.copy(valid_files[0], output_path)
-        return True
+        try:
+            shutil.copy(valid_files[0], output_path)
+            return True
+        except Exception:
+            return False
         
     temp_txt = None
     try:
@@ -379,15 +382,26 @@ def concat_media_files(file_list, output_path):
                 safe_path = filepath.replace("\\", "/")
                 f.write(f"file '{safe_path}'\n")
                 
-        cmd = [
-            ffmpeg_bin, "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", temp_txt,
-            "-c", "copy",
-            output_path
-        ]
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+        if is_video:
+            cmd = [
+                ffmpeg_bin, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", temp_txt,
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-ac", "1", "-ar", "16000",
+                output_path
+            ]
+        else:
+            cmd = [
+                ffmpeg_bin, "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", temp_txt,
+                "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
+                output_path
+            ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
         return res.returncode == 0
     except Exception:
         return False
@@ -399,7 +413,7 @@ def concat_media_files(file_list, output_path):
 
 # --- Radio Scraper ---
 class RadioScraper:
-    def __init__(self, name, tunein_url, keywords, duration=30, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
+    def __init__(self, name, tunein_url, keywords, duration=60, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
         self.name = name
         self.tunein_url = tunein_url
         self.keywords = keywords
@@ -526,7 +540,7 @@ class RadioScraper:
                 persistent_path = os.path.join(media_dir, audio_filename)
                 
                 concat_list = [self.last_segment_audio, temp_audio, temp_audio_next]
-                success = concat_media_files(concat_list, persistent_path)
+                success = concat_media_files(concat_list, persistent_path, is_video=False)
                 
                 if success:
                     audio_ref = persistent_path
@@ -2062,7 +2076,7 @@ class RSSScraper:
 
 # --- TV Scraper ---
 class TVScraper:
-    def __init__(self, name, stream_url, keywords, duration=20, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
+    def __init__(self, name, stream_url, keywords, duration=60, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
         self.name = name
         self.stream_url = stream_url
         self.keywords = keywords
@@ -2219,7 +2233,7 @@ class TVScraper:
                 persistent_path = os.path.join(media_dir, video_filename)
                 
                 concat_list = [self.last_segment_video, temp_video, temp_video_next]
-                success = concat_media_files(concat_list, persistent_path)
+                success = concat_media_files(concat_list, persistent_path, is_video=True)
                 
                 if success:
                     video_ref = persistent_path
@@ -2548,7 +2562,7 @@ class MonitoringEngine:
         # Instantiate Scrapers
         self.scrapers = []
         for r in self.radio_channels:
-            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=60, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
         for yt in self.youtube_channels:
             self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
         for ig in self.instagram_channels:
@@ -2594,7 +2608,7 @@ class MonitoringEngine:
             for rss in self.rss_feeds:
                 self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:
-            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=20, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=60, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
             
         self.analyzer = OllamaAnalyzer(self.ollama_model, api_mode=self.ai_mode, credentials_path=self.google_vision_credentials, api_key=self.google_gemini_api_key)
 
