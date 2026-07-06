@@ -426,6 +426,23 @@ class RadioScraper:
             )
             
             if result.returncode != 0:
+                if stream_url.startswith("https://"):
+                    fallback_url = stream_url.replace("https://", "http://", 1)
+                    cmd_fallback = []
+                    for item in cmd:
+                        if item == stream_url:
+                            cmd_fallback.append(fallback_url)
+                        else:
+                            cmd_fallback.append(item)
+                    
+                    result = subprocess.run(
+                        cmd_fallback,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=self.duration + 15
+                    )
+            
+            if result.returncode != 0:
                 raise RuntimeError(f"FFmpeg failed: {clean_ffmpeg_error(result.stderr)}")
             
             if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) == 0:
@@ -2061,6 +2078,23 @@ class TVScraper:
             ]
             
             result = subprocess.run(cmd_video, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=self.duration + 20)
+            if result.returncode != 0:
+                if resolved_url.startswith("https://"):
+                    fallback_url = resolved_url.replace("https://", "http://", 1)
+                    cmd_video_fallback = []
+                    for item in cmd_video:
+                        if item == resolved_url:
+                            cmd_video_fallback.append(fallback_url)
+                        else:
+                            cmd_video_fallback.append(item)
+                    
+                    result = subprocess.run(
+                        cmd_video_fallback,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=self.duration + 20
+                    )
+            
             if result.returncode != 0:
                 raise RuntimeError(f"FFmpeg video recording failed: {clean_ffmpeg_error(result.stderr)}")
                 
