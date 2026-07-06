@@ -1602,23 +1602,26 @@ with col_left:
                 all_sources = list(set([a["source"] for a in st.session_state.alerts]))
                 # Filter specific sources based on selected media types
                 matching_sources = []
-                for src in all_sources:
-                    src_lower = src.lower()
-                    for m_type in selected_media:
-                        if "Radio" in m_type and "radio" in src_lower:
-                            matching_sources.append(src)
-                        elif "TV" in m_type and "tv" in src_lower:
-                            matching_sources.append(src)
-                        elif "YouTube" in m_type and "youtube" in src_lower:
-                            matching_sources.append(src)
-                        elif "Instagram" in m_type and "instagram" in src_lower:
-                            matching_sources.append(src)
-                        elif "Twitter" in m_type and "twitter" in src_lower:
-                            matching_sources.append(src)
-                        elif "Facebook" in m_type and "facebook" in src_lower:
-                            matching_sources.append(src)
-                        elif "RSS" in m_type and "rss" in src_lower:
-                            matching_sources.append(src)
+                if not selected_media:
+                    matching_sources = all_sources
+                else:
+                    for src in all_sources:
+                        src_lower = src.lower()
+                        for m_type in selected_media:
+                            if "Radio" in m_type and "radio" in src_lower:
+                                matching_sources.append(src)
+                            elif "TV" in m_type and "tv" in src_lower:
+                                matching_sources.append(src)
+                            elif "YouTube" in m_type and "youtube" in src_lower:
+                                matching_sources.append(src)
+                            elif "Instagram" in m_type and "instagram" in src_lower:
+                                matching_sources.append(src)
+                            elif "Twitter" in m_type and "twitter" in src_lower:
+                                matching_sources.append(src)
+                            elif "Facebook" in m_type and "facebook" in src_lower:
+                                matching_sources.append(src)
+                            elif "RSS" in m_type and "rss" in src_lower:
+                                matching_sources.append(src)
                 matching_sources = sorted(list(set(matching_sources)))
                 selected_sources = st.multiselect("Fuente/Canal", options=matching_sources, default=matching_sources, key="selected_sources_val")
             with col_f4:
@@ -1628,32 +1631,34 @@ with col_left:
             for alert in st.session_state.alerts:
                 keyword_match = True
                 if selected_keywords:
-                    # Comparar de forma insensible a mayúsculas/minúsculas y espacios
                     alert_kws_set = {kw.lower().strip() for kw in alert.get("keywords", [])}
                     selected_kws_set = {kw.lower().strip() for kw in selected_keywords}
                     keyword_match = bool(alert_kws_set.intersection(selected_kws_set))
                 
-                source_match = alert["source"] in selected_sources
-                sentiment_match = alert["sentimiento"] in selected_sentiments
+                source_match = True if not selected_sources else (alert["source"] in selected_sources)
+                sentiment_match = True if not selected_sentiments else (alert["sentimiento"] in selected_sentiments)
                 
                 # Check medium type match
                 source_lower = alert["source"].lower()
                 media_type_match = False
-                for m_type in selected_media:
-                    if "Radio" in m_type and "radio" in source_lower:
-                        media_type_match = True
-                    elif "TV" in m_type and "tv" in source_lower:
-                        media_type_match = True
-                    elif "YouTube" in m_type and "youtube" in source_lower:
-                        media_type_match = True
-                    elif "Instagram" in m_type and "instagram" in source_lower:
-                        media_type_match = True
-                    elif "Twitter" in m_type and "twitter" in source_lower:
-                        media_type_match = True
-                    elif "Facebook" in m_type and "facebook" in source_lower:
-                        media_type_match = True
-                    elif "RSS" in m_type and "rss" in source_lower:
-                        media_type_match = True
+                if not selected_media:
+                    media_type_match = True
+                else:
+                    for m_type in selected_media:
+                        if "Radio" in m_type and "radio" in source_lower:
+                            media_type_match = True
+                        elif "TV" in m_type and "tv" in source_lower:
+                            media_type_match = True
+                        elif "YouTube" in m_type and "youtube" in source_lower:
+                            media_type_match = True
+                        elif "Instagram" in m_type and "instagram" in source_lower:
+                            media_type_match = True
+                        elif "Twitter" in m_type and "twitter" in source_lower:
+                            media_type_match = True
+                        elif "Facebook" in m_type and "facebook" in source_lower:
+                            media_type_match = True
+                        elif "RSS" in m_type and "rss" in source_lower:
+                            media_type_match = True
                         
                 if keyword_match and source_match and sentiment_match and media_type_match:
                     filtered_alerts.append(alert)

@@ -351,6 +351,52 @@ def transcribe_audio(audio_path, whisper_model_name="tiny", language_code="es", 
     return transcription.get("text", "")
 
 
+def concat_media_files(file_list, output_path):
+    """
+    Concatenates multiple audio/video files using FFmpeg's concat demuxer.
+    """
+    import subprocess
+    import tempfile
+    import os
+    import shutil
+    
+    ffmpeg_bin = get_ffmpeg_path()
+    if not ffmpeg_bin or not file_list:
+        return False
+        
+    valid_files = [f for f in file_list if f and os.path.exists(f) and os.path.getsize(f) > 0]
+    if not valid_files:
+        return False
+    if len(valid_files) == 1:
+        shutil.copy(valid_files[0], output_path)
+        return True
+        
+    temp_txt = None
+    try:
+        fd, temp_txt = tempfile.mkstemp(suffix=".txt", text=True)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            for filepath in valid_files:
+                safe_path = filepath.replace("\\", "/")
+                f.write(f"file '{safe_path}'\n")
+                
+        cmd = [
+            ffmpeg_bin, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", temp_txt,
+            "-c", "copy",
+            output_path
+        ]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+        return res.returncode == 0
+    except Exception:
+        return False
+    finally:
+        if temp_txt and os.path.exists(temp_txt):
+            try: os.remove(temp_txt)
+            except Exception: pass
+
+
 # --- Radio Scraper ---
 class RadioScraper:
     def __init__(self, name, tunein_url, keywords, duration=30, whisper_model="tiny", language="es", transcription_mode="Local (Whisper)", credentials_path=None):
@@ -362,6 +408,7 @@ class RadioScraper:
         self.language = language
         self.transcription_mode = transcription_mode
         self.credentials_path = credentials_path
+        self.last_segment_audio = None
 
     def scrape(self):
         import tempfile
@@ -460,19 +507,47 @@ class RadioScraper:
             # 4. Keyword Match
             found_kws = contains_keywords(text, self.keywords)
             if found_kws:
-                # Save audio to static directory
+                temp_audio_next = os.path.join(temp_dir, f"radio_temp_next_{uuid.uuid4().hex}.wav")
+                cmd_next = []
+                for item in cmd:
+                    if item == temp_audio:
+                        cmd_next.append(temp_audio_next)
+                    elif item == str(self.duration):
+                        cmd_next.append("60")
+                    else:
+                        cmd_next.append(item)
+                
+                subprocess.run(cmd_next, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=80)
+                
                 project_dir = os.path.dirname(os.path.abspath(__file__))
                 media_dir = os.path.join(project_dir, "static")
                 os.makedirs(media_dir, exist_ok=True)
                 audio_filename = f"radio_{int(time.time())}.wav"
                 persistent_path = os.path.join(media_dir, audio_filename)
                 
-                try:
-                    shutil.move(temp_audio, persistent_path)
+                concat_list = [self.last_segment_audio, temp_audio, temp_audio_next]
+                success = concat_media_files(concat_list, persistent_path)
+                
+                if success:
                     audio_ref = persistent_path
-                except Exception:
-                    audio_ref = temp_audio
-                    
+                else:
+                    try:
+                        shutil.copy(temp_audio, persistent_path)
+                        audio_ref = persistent_path
+                    except Exception:
+                        audio_ref = temp_audio
+                        
+                if os.path.exists(temp_audio_next):
+                    try: os.remove(temp_audio_next)
+                    except Exception: pass
+                if os.path.exists(temp_audio):
+                    try: os.remove(temp_audio)
+                    except Exception: pass
+                if self.last_segment_audio and os.path.exists(self.last_segment_audio):
+                    try: os.remove(self.last_segment_audio)
+                    except Exception: pass
+                self.last_segment_audio = None
+                
                 return [{
                     "source": f"Radio ({self.name})",
                     "text": text.strip(),
@@ -483,10 +558,10 @@ class RadioScraper:
                     "audio_path": audio_ref
                 }]
             else:
-                # Clean up audio file if no keyword matches
-                if os.path.exists(temp_audio):
-                    try: os.remove(temp_audio)
+                if self.last_segment_audio and os.path.exists(self.last_segment_audio):
+                    try: os.remove(self.last_segment_audio)
                     except Exception: pass
+                self.last_segment_audio = temp_audio
                 return []
             
         except Exception as e:
@@ -1996,6 +2071,8 @@ class TVScraper:
         self.language = language
         self.transcription_mode = transcription_mode
         self.credentials_path = credentials_path
+        self.last_segment_video = None
+        self.last_segment_audio = None
 
     def scrape(self):
         import tempfile
@@ -2123,19 +2200,47 @@ class TVScraper:
             # 4. Keyword Match
             found_kws = contains_keywords(text, self.keywords)
             if found_kws:
-                # Save video to static directory
+                temp_video_next = os.path.join(temp_dir, f"tv_temp_next_{uuid.uuid4().hex}.mp4")
+                cmd_video_next = []
+                for item in cmd_video:
+                    if item == temp_video:
+                        cmd_video_next.append(temp_video_next)
+                    elif item == str(self.duration):
+                        cmd_video_next.append("60")
+                    else:
+                        cmd_video_next.append(item)
+                        
+                subprocess.run(cmd_video_next, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=80)
+                
                 project_dir = os.path.dirname(os.path.abspath(__file__))
                 media_dir = os.path.join(project_dir, "static")
                 os.makedirs(media_dir, exist_ok=True)
                 video_filename = f"tv_{ts}.mp4"
                 persistent_path = os.path.join(media_dir, video_filename)
                 
-                try:
-                    shutil.move(temp_video, persistent_path)
+                concat_list = [self.last_segment_video, temp_video, temp_video_next]
+                success = concat_media_files(concat_list, persistent_path)
+                
+                if success:
                     video_ref = persistent_path
-                except Exception:
-                    video_ref = temp_video
-                    
+                else:
+                    try:
+                        shutil.copy(temp_video, persistent_path)
+                        video_ref = persistent_path
+                    except Exception:
+                        video_ref = temp_video
+                        
+                if os.path.exists(temp_video_next):
+                    try: os.remove(temp_video_next)
+                    except Exception: pass
+                if os.path.exists(temp_video):
+                    try: os.remove(temp_video)
+                    except Exception: pass
+                if self.last_segment_video and os.path.exists(self.last_segment_video):
+                    try: os.remove(self.last_segment_video)
+                    except Exception: pass
+                self.last_segment_video = None
+                
                 return [{
                     "source": f"TV ({self.name})",
                     "text": text.strip(),
@@ -2146,10 +2251,10 @@ class TVScraper:
                     "video_path": video_ref
                 }]
             else:
-                # Clean up video file if no keyword matches
-                if os.path.exists(temp_video):
-                    try: os.remove(temp_video)
+                if self.last_segment_video and os.path.exists(self.last_segment_video):
+                    try: os.remove(self.last_segment_video)
                     except Exception: pass
+                self.last_segment_video = temp_video
                 return []
                 
         except Exception as e:
