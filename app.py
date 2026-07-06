@@ -1398,37 +1398,37 @@ def render_right_column():
     neg_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Negativo")
     
     st.markdown("##### <i class='fa-solid fa-chart-column'></i> Volumen por Canal", unsafe_allow_html=True)
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-radio' style='color: #9b59b6; margin-right: 6px;'></i>Radio ({radio_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-radio' style='color: #9b59b6; margin-right: 6px;'></i>Radio ({radio_cnt})</div>", unsafe_allow_html=True)
     st.progress(radio_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-tv' style='color: #3498db; margin-right: 6px;'></i>TV ({tv_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-tv' style='color: #3498db; margin-right: 6px;'></i>TV ({tv_cnt})</div>", unsafe_allow_html=True)
     st.progress(tv_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-youtube' style='color: #e74c3c; margin-right: 6px;'></i>YouTube ({yt_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-youtube' style='color: #e74c3c; margin-right: 6px;'></i>YouTube ({yt_cnt})</div>", unsafe_allow_html=True)
     st.progress(yt_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-instagram' style='color: #e1306c; margin-right: 6px;'></i>Instagram ({ig_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-instagram' style='color: #e1306c; margin-right: 6px;'></i>Instagram ({ig_cnt})</div>", unsafe_allow_html=True)
     st.progress(ig_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-x-twitter' style='color: #f1f2f6; margin-right: 6px;'></i>Twitter ({tw_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-x-twitter' style='color: #f1f2f6; margin-right: 6px;'></i>Twitter ({tw_cnt})</div>", unsafe_allow_html=True)
     st.progress(tw_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook ({fb_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook ({fb_cnt})</div>", unsafe_allow_html=True)
     st.progress(fb_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS ({rss_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS ({rss_cnt})</div>", unsafe_allow_html=True)
     st.progress(rss_cnt / total_m if total_m > 0 else 0.0)
     
     st.markdown("---")
     st.markdown("##### <i class='fa-solid fa-heart-pulse'></i> Distribución de Sentimiento", unsafe_allow_html=True)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-check' style='color: #2ecc71; margin-right: 6px;'></i>Positivo ({pos_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-check' style='color: #2ecc71; margin-right: 6px;'></i>Positivo ({pos_cnt})</div>", unsafe_allow_html=True)
     st.progress(pos_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-info' style='color: #3498db; margin-right: 6px;'></i>Neutral ({neu_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-info' style='color: #3498db; margin-right: 6px;'></i>Neutral ({neu_cnt})</div>", unsafe_allow_html=True)
     st.progress(neu_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown("<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-exclamation' style='color: #e74c3c; margin-right: 6px;'></i>Negativo ({neg_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-circle-exclamation' style='color: #e74c3c; margin-right: 6px;'></i>Negativo ({neg_cnt})</div>", unsafe_allow_html=True)
     st.progress(neg_cnt / total_m if total_m > 0 else 0.0)
     
     # --- Media Uptime Panel ---
