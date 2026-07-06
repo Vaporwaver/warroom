@@ -545,18 +545,56 @@ class YouTubeScraper:
                 'no_warnings': True,
                 'socket_timeout': 45,
             }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(self.channel_url, download=False)
-                entries = info.get('entries', [])
-                video_ids = [entry['id'] for entry in entries if entry.get('id') and len(entry['id']) == 11]
-                
-                # Build map of video_id -> title
-                video_map = {}
-                for entry in entries:
-                    v_id = entry.get('id')
-                    if v_id and len(v_id) == 11:
-                        video_map[v_id] = entry.get('title') or "Video de YouTube"
-                
+            video_ids = []
+            video_map = {}
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(self.channel_url, download=False)
+                    entries = info.get('entries', [])
+                    video_ids = [entry['id'] for entry in entries if entry.get('id') and len(entry['id']) == 11]
+                    for entry in entries:
+                        v_id = entry.get('id')
+                        if v_id and len(v_id) == 11:
+                            video_map[v_id] = entry.get('title') or "Video de YouTube"
+            except Exception as e:
+                log(f"yt-dlp falló para {self.channel_name} ({e}). Intentando fallback de RSS feed...")
+                try:
+                    import urllib.request
+                    import re
+                    
+                    req = urllib.request.Request(
+                        self.channel_url,
+                        headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept-Language': 'en-US,en;q=0.9'
+                        }
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        html = response.read().decode('utf-8', errors='ignore')
+                        
+                    match = re.search(r'youtube\.com/channel/(UC[a-zA-Z0-9_-]{22})', html)
+                    if not match:
+                        match = re.search(r'/channel/(UC[a-zA-Z0-9_-]{22})', html)
+                        
+                    if match:
+                        channel_id = match.group(1)
+                        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+                        rss_req = urllib.request.Request(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(rss_req, timeout=10) as rss_resp:
+                            xml_content = rss_resp.read().decode('utf-8', errors='ignore')
+                            
+                        entries = re.findall(r'<entry>.*?</entry>', xml_content, re.DOTALL)
+                        for entry in entries:
+                            vid_match = re.search(r'<yt:videoId>([^<]+)</yt:videoId>', entry)
+                            title_match = re.search(r'<title>([^<]+)</title>', entry)
+                            if vid_match:
+                                v_id = vid_match.group(1)
+                                title = title_match.group(1) if title_match else "Video de YouTube"
+                                video_ids.append(v_id)
+                                video_map[v_id] = title
+                except Exception as fallback_exc:
+                    log(f"Fallback RSS falló para {self.channel_name}: {fallback_exc}")
+                    
             if not video_ids:
                 raise ValueError(f"No se pudieron extraer los IDs de los videos de YouTube ({self.channel_name})")
                 
@@ -1944,6 +1982,8 @@ class TVScraper:
 
     def scrape(self):
         import tempfile
+        import time
+        ts = int(time.time())
         temp_video = None
         temp_audio = None
         try:
