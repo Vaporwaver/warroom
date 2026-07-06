@@ -2223,6 +2223,43 @@ with col_left:
                                     st.link_button("📰 Google News", gnews_url, use_container_width=True)
                         else:
                             st.warning("⚠️ No se pudieron identificar nombres o entidades específicas asociadas a este rostro en la web.")
+
+                        # Extraer nombres adicionales sugeridos desde los títulos de las páginas web coincidentes
+                        title_suggestions = []
+                        import re
+                        for p in pages:
+                            title = p.get('page_title', '')
+                            if title:
+                                parts = re.split(r'\s*[\|\-–—:]\s*', title)
+                                first_part = parts[0].strip()
+                                if first_part and len(first_part) > 2 and len(first_part) < 50:
+                                    # Excluir títulos muy comunes o genéricos
+                                    if first_part.lower() not in ["rock", "girl", "official uk trailer", "just girls being girls", "página de noticia", "home", "inicio"]:
+                                        title_suggestions.append(first_part)
+                                        
+                        unique_title_sugs = []
+                        for sug in title_suggestions:
+                            if sug not in unique_title_sugs:
+                                unique_title_sugs.append(sug)
+                                
+                        if unique_title_sugs:
+                            st.write("📌 **Nombres adicionales extraídos de páginas web coincidentes:**")
+                            for idx, name in enumerate(unique_title_sugs[:5]):
+                                col_sug_lbl, col_sug_act1, col_sug_act2 = st.columns([0.5, 0.25, 0.25])
+                                with col_sug_lbl:
+                                    st.write(f"👤 **{name}** *(Desde título de página)*")
+                                with col_sug_act1:
+                                    sug_btn_key = f"web_sug_search_{idx}_{name}"
+                                    if st.button("➕ Keyword", key=sug_btn_key, use_container_width=True, help="Añade este nombre a la lista temporal de palabras clave del cliente seleccionado."):
+                                        if "temp_client_keywords" not in st.session_state:
+                                            st.session_state.temp_client_keywords = []
+                                        if name not in st.session_state.temp_client_keywords:
+                                            st.session_state.temp_client_keywords.append(name)
+                                            st.success(f"Añadido: {name}")
+                                            st.rerun()
+                                with col_sug_act2:
+                                    gnews_url = f"https://news.google.com/search?q={urllib.parse.quote(name)}&hl=es-419&gl=DO&ceid=DO:es-419"
+                                    st.link_button("📰 Google News", gnews_url, use_container_width=True)
                             
                         st.markdown("---")
                         
