@@ -98,24 +98,37 @@ def get_yandex_link(image_bytes):
 
 def detect_face_in_image(image_bytes):
     """Detects the largest face in the provided image bytes. Returns the cropped face image (BGR) or None."""
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if img is None:
-        return None
+    try:
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            return None
+            
+        if not hasattr(cv2, 'CascadeClassifier'):
+            print("WARNING: cv2.CascadeClassifier is missing. OpenCV installation might be broken. Returning original image.")
+            return img
+            
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
         
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-    
-    if len(faces) == 0:
-        return None
-        
-    # Pick the largest face by area
-    largest_face = max(faces, key=lambda f: f[2] * f[3])
-    x, y, w, h = largest_face
-    face_crop = img[y:y+h, x:x+w]
-    return face_crop
+        if len(faces) == 0:
+            return img
+            
+        # Pick the largest face by area
+        largest_face = max(faces, key=lambda f: f[2] * f[3])
+        x, y, w, h = largest_face
+        face_crop = img[y:y+h, x:x+w]
+        return face_crop
+    except Exception as e:
+        print(f"Error in detect_face_in_image: {e}")
+        try:
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            return img
+        except Exception:
+            return None
 
 def compare_faces(target_face, test_face):
     """Compares two BGR face crops and returns a similarity score from 0.0 to 1.0."""
@@ -155,8 +168,12 @@ def search_local_videos(target_face_bgr, static_dir, similarity_threshold=0.65, 
     # Get all .mp4 videos in the directory
     videos = [f for f in os.listdir(static_dir) if f.endswith('.mp4') and not f.startswith('match_')]
     
-    cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-    face_cascade = cv2.CascadeClassifier(cascade_path)
+    if hasattr(cv2, 'CascadeClassifier'):
+        cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+    else:
+        face_cascade = None
+        print("WARNING: cv2.CascadeClassifier is missing. Video face search will be bypassed.")
     
     total_videos = len(videos)
     
@@ -186,7 +203,7 @@ def search_local_videos(target_face_bgr, static_dir, similarity_threshold=0.65, 
             if not ret:
                 break
                 
-            if frame_num % step == 0:
+            if frame_num % step == 0 and face_cascade is not None:
                 # Detect faces in this frame
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = face_cascade.detectMultiScale(gray, 1.1, 4)
