@@ -13,6 +13,15 @@ import unicodedata
 import warnings
 import database
 
+# Silent logger to suppress yt-dlp console error spam
+class YtdlSilentLogger:
+    def debug(self, msg):
+        pass
+    def warning(self, msg):
+        pass
+    def error(self, msg):
+        pass
+
 # Initialize SQLite database
 database.initialize_db()
 
@@ -435,6 +444,7 @@ class RadioScraper:
                 'no_warnings': True,
                 'skip_download': True,
                 'socket_timeout': 45,
+                'logger': YtdlSilentLogger(),
             }
             stream_url = self.tunein_url
             try:
@@ -650,6 +660,7 @@ class YouTubeScraper:
                 'playlistend': 100,  # Fetch top 100 videos to cover up to 2 weeks
                 'no_warnings': True,
                 'socket_timeout': 45,
+                'logger': YtdlSilentLogger(),
             }
             video_ids = []
             video_map = {}
@@ -733,7 +744,7 @@ class YouTubeScraper:
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
                 is_too_old = False
                 try:
-                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 45}) as ydl:
+                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 45, 'logger': YtdlSilentLogger()}) as ydl:
                         video_info = ydl.extract_info(video_url, download=False)
                         ts = video_info.get('timestamp')
                         if ts:
@@ -846,6 +857,7 @@ class YouTubeScraper:
                             'no_warnings': True,
                             'max_filesize': 30 * 1024 * 1024, # Limit to 30MB max
                             'socket_timeout': 45,
+                            'logger': YtdlSilentLogger(),
                         }
                         
                         video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -2102,6 +2114,7 @@ class TVScraper:
                 'no_warnings': True,
                 'skip_download': True,
                 'socket_timeout': 45,
+                'logger': YtdlSilentLogger(),
             }
             is_youtube = "youtube.com" in self.stream_url or "youtu.be" in self.stream_url
             resolved_url = None
