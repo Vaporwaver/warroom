@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Warroom Cookie Extractor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #06b6d4; /* Cyan */
+      --secondary: #6366f1; /* Indigo */
+      --success: #10b981; /* Esmeralda */
+      --error: #ef4444; /* Rojo */
+      --glow-cyan: rgba(6, 182, 212, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      width: 360px;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      padding: 16px;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .logo-container {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px var(--glow-cyan);
+    }
+
+    .logo-text {
+      color: white;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .header-info h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      background: linear-gradient(to right, #00f2fe, #4facfe);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-info p {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Cards */
+    .cards-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px;
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(6, 182, 212, 0.3);
+      box-shadow: 0 4px 15px rgba(6, 182, 212, 0.05);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .platform-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    /* Iconos Redes */
+    .dot-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--text-muted);
+      display: inline-block;
+      box-shadow: 0 0 6px rgba(255,255,255,0.2);
+    }
+
+    .dot-status.active {
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .dot-status.inactive {
+      background-color: var(--error);
+      box-shadow: 0 0 8px var(--error);
+    }
+
+    .cookie-info {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      border-radius: 6px;
+      word-break: break-all;
+      font-family: monospace;
+      max-height: 48px;
+      overflow-y: auto;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      flex: 1;
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: var(--text-main);
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      border-color: transparent;
+      transform: scale(1.02);
+      box-shadow: 0 0 8px rgba(6, 182, 212, 0.3);
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      border-color: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Instrucciones */
+    .footer {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 10.5px;
+      line-height: 1.4;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+    }
+
+    .footer strong {
+      color: var(--text-main);
+    }
+
+    .footer ol {
+      padding-left: 14px;
+      margin-top: 4px;
+    }
+
+    .footer li {
+      margin-bottom: 2px;
+    }
+
+    .refresh-btn {
+      margin-top: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-container">
+      <span class="logo-text">W</span>
+    </div>
+    <div class="header-info">
+      <h1>Warroom Cookie Extractor</h1>
+      <p>Extrae credenciales de sesión activas</p>
+    </div>
+  </div>
+
+  <div class="cards-container">
+    <!-- Instagram -->
+    <div class="card" id="instagram-card">
+      <div class="card-header">
+        <div class="platform-title">
+          <span>Instagram</span>
+        </div>
+        <span class="dot-status" id="instagram-status"></span>
+      </div>
+      <div class="cookie-info" id="instagram-value">Buscando cookie 'sessionid'...</div>
+      <button id="copy-instagram" disabled>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span>Copiar sessionid</span>
+      </button>
+    </div>
+
+    <!-- Twitter -->
+    <div class="card" id="twitter-card">
+      <div class="card-header">
+        <div class="platform-title">
+          <span>Twitter (X)</span>
+        </div>
+        <span class="dot-status" id="twitter-status"></span>
+      </div>
+      <div class="cookie-info" id="twitter-value">Buscando cookie 'auth_token'...</div>
+      <button id="copy-twitter" disabled>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span>Copiar auth_token</span>
+      </button>
+    </div>
+
+    <!-- Facebook -->
+    <div class="card" id="facebook-card">
+      <div class="card-header">
+        <div class="platform-title">
+          <span>Facebook</span>
+        </div>
+        <span class="dot-status" id="facebook-status"></span>
+      </div>
+      <div class="cookie-info" id="facebook-value">Buscando cookies de Facebook...</div>
+      <div class="button-group">
+        <button id="copy-facebook-header" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span>Copiar Cabecera</span>
+        </button>
+        <button id="copy-facebook-json" disabled>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span>Copiar JSON</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <strong>Instrucciones:</strong>
+    <ol>
+      <li>Inicia sesión en tus cuentas de redes sociales en este navegador.</li>
+      <li>Abre esta extensión y haz clic en <strong>Copiar</strong>.</li>
+      <li>Pega los valores correspondientes en la barra lateral de <strong>Warroom</strong>.</li>
+    </ol>
+    <button class="refresh-btn" id="refresh-btn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+      <span>Actualizar Cookies</span>
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
