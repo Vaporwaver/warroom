@@ -2785,29 +2785,38 @@ class MonitoringEngine:
                     scraper.cookies_str = self.facebook_cookies
             self.analyzer.model_name = self.ollama_model
             
+            fast_scrapers = [s for s in self.scrapers if s.__class__.__name__ in ("RSSScraper", "GoogleNewsScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper", "YouTubeScraper")]
+            stream_scrapers = [s for s in self.scrapers if s.__class__.__name__ in ("RadioScraper", "TVScraper")]
+            
             num_workers = len(self.scrapers)
             if num_workers > 0:
-                self.log_event(f"Iniciando ciclo de monitoreo paralelo para {len(self.scrapers)} canales...")
+                self.log_event(f"Iniciando ciclo simultáneo: {len(fast_scrapers)} fuentes digitales/RSS + {len(stream_scrapers)} canales de radio/TV...")
                 
-                # Limit concurrency to a maximum of 8 workers to prevent network bandwidth and CPU saturation
-                with ThreadPoolExecutor(max_workers=min(num_workers, 8)) as executor:
-                    futures = {}
-                    for scraper in self.scrapers:
+                futures = {}
+                fast_max = min(max(len(fast_scrapers), 1), 12)
+                stream_max = min(max(len(stream_scrapers), 1), 8)
+                
+                with ThreadPoolExecutor(max_workers=fast_max) as fast_executor, ThreadPoolExecutor(max_workers=stream_max) as stream_executor:
+                    # 1. Submit fast RSS and web scrapers FIRST so they execute immediately on second 0
+                    for scraper in fast_scrapers:
                         if self.stop_event.is_set():
                             break
-                        
-                        # Define wrapper function depending on scraper type and mode
                         if self.force_simulation:
-                            futures[executor.submit(scraper.get_simulated_mention)] = scraper
+                            futures[fast_executor.submit(scraper.get_simulated_mention)] = scraper
                         else:
                             cls_name = scraper.__class__.__name__
-                            if cls_name == "YouTubeScraper":
-                                futures[executor.submit(scraper.scrape, self)] = scraper
-                            elif cls_name in ("RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper"):
-                                futures[executor.submit(scraper.scrape, self)] = scraper
-                            elif cls_name in ("RadioScraper", "TVScraper"):
-                                futures[executor.submit(scraper.scrape)] = scraper
-                                
+                            if cls_name in ("YouTubeScraper", "RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper", "GoogleNewsScraper"):
+                                futures[fast_executor.submit(scraper.scrape, self)] = scraper
+
+                    # 2. Submit stream scrapers (Radio/TV) simultaneously on second 0
+                    for scraper in stream_scrapers:
+                        if self.stop_event.is_set():
+                            break
+                        if self.force_simulation:
+                            futures[stream_executor.submit(scraper.get_simulated_mention)] = scraper
+                        else:
+                            futures[stream_executor.submit(scraper.scrape)] = scraper
+
                     for future in as_completed(futures):
                         scraper = futures[future]
                         name = get_scraper_display_name(scraper)
