@@ -484,6 +484,7 @@ class RadioScraper:
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
                 "-timeout", "10000000",
+                "-rw_timeout", "15000000",
                 "-i", stream_url, "-t", str(self.duration),
                 "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", temp_audio
             ]
@@ -2176,6 +2177,7 @@ class TVScraper:
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
                 "-timeout", "10000000",
+                "-rw_timeout", "15000000",
                 "-i", resolved_url, "-t", str(self.duration),
                 "-c:v", "copy",
                 "-c:a", "aac", "-ac", "1", "-ar", "16000", temp_video
@@ -2695,7 +2697,8 @@ class MonitoringEngine:
             if num_workers > 0:
                 self.log_event(f"Iniciando ciclo de monitoreo paralelo para {len(self.scrapers)} canales...")
                 
-                with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                # Limit concurrency to a maximum of 8 workers to prevent network bandwidth and CPU saturation
+                with ThreadPoolExecutor(max_workers=min(num_workers, 8)) as executor:
                     futures = {}
                     for scraper in self.scrapers:
                         if self.stop_event.is_set():
