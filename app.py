@@ -955,8 +955,11 @@ https://eldinero.com.do/feed/"""
             args=("rss_feeds_val", "config_rss_feeds"),
             help="Ingresa una URL de feed RSS o medio digital por línea."
         )
-else:
-    st.sidebar.info(f"🔍 **Buscando:** `{st.session_state.get('keywords_str', '')}`")
+    active_kws = st.session_state.get('keywords_str', '')
+    st.sidebar.info(f"🔍 **Buscando:** `{active_kws}`")
+    explanation_sidebar = scrapers.explain_boolean_query(active_kws)
+    if explanation_sidebar:
+        st.sidebar.caption(f"💡 {explanation_sidebar}")
     
     # Format active lists
     engine = st.session_state.get("engine")
@@ -2538,10 +2541,11 @@ with col_left:
 
             def append_operator_callback(op):
                 current = st.session_state.get("new_kw_input_field", "")
-                if current and not current.endswith(" "):
-                    st.session_state.new_kw_input_field = current + " " + op + " "
+                current_clean = current.rstrip()
+                if current_clean:
+                    st.session_state.new_kw_input_field = f"{current_clean} {op} "
                 else:
-                    st.session_state.new_kw_input_field = current + op + " "
+                    st.session_state.new_kw_input_field = f"{op} "
 
             # Form fields
             form_name = st.text_input("Nombre del Cliente", value=default_name, placeholder="Ej. Presidencia de la República")
@@ -2580,6 +2584,14 @@ with col_left:
                 st.button("(", key="btn_op_lpar", use_container_width=True, on_click=append_operator_callback, args=("(",))
             with col_op5:
                 st.button(")", key="btn_op_rpar", use_container_width=True, on_click=append_operator_callback, args=(")",))
+
+            # Explicación dinámica de lo que se está escribiendo actualmente
+            current_typing = st.session_state.get("new_kw_input_field", "").strip()
+            if current_typing:
+                exp_typing = scrapers.explain_boolean_query(current_typing)
+                if exp_typing:
+                    st.markdown(f"<div style='background: rgba(6, 182, 212, 0.1); border-left: 3px solid #06b6d4; padding: 8px 12px; border-radius: 6px; font-size: 0.85rem; margin-top: 6px; margin-bottom: 8px; color: #f8fafc;'>💡 <strong>Vista previa:</strong> {exp_typing}</div>", unsafe_allow_html=True)
+
             st.caption("💡 *Ejemplo:* `(danilo OR leonel) AND NOT gobierno` *(busca menciones que contengan Danilo o Leonel, pero no gobierno)*")
 
             # Mostrar palabras clave actuales como chips interactivos
@@ -2592,6 +2604,12 @@ with col_left:
                         if st.button(f"❌ {kw}", key=f"del_kw_{idx}_{kw}", use_container_width=True):
                             st.session_state.temp_client_keywords.remove(kw)
                             st.rerun()
+
+                # Generar explicación en español del filtro completo del cliente
+                full_query = " OR ".join([f"({kw})" if any(b in kw for b in (" AND ", " OR ", " NOT ")) else kw for kw in st.session_state.temp_client_keywords])
+                exp_total = scrapers.explain_boolean_query(full_query)
+                if exp_total:
+                    st.markdown(f"<div style='background: rgba(16, 185, 129, 0.12); border-left: 3px solid #10b981; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 10px; margin-bottom: 12px; color: #f8fafc;'>📌 <strong>Filtro Final del Cliente:</strong> {exp_total}</div>", unsafe_allow_html=True)
             else:
                 st.info("💡 No hay palabras clave añadidas aún. Escribe arriba para agregar.")
                 

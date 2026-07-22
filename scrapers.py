@@ -85,6 +85,72 @@ def evaluate_boolean_query(expression, text):
     except Exception:
         return False, []
 
+def explain_boolean_query(query_str):
+    """
+    Genera una explicación en español natural sobre lo que buscará la consulta booleana.
+    """
+    if not query_str or not str(query_str).strip():
+        return ""
+    
+    q_str = str(query_str).strip()
+    
+    token_pattern = re.compile(r'\(|\)|AND|OR|NOT|"[^"]+"|[^\s()]+', re.IGNORECASE)
+    tokens = token_pattern.findall(q_str)
+    if not tokens:
+        return ""
+        
+    has_explicit_boolean = any(t.upper() in ('AND', 'OR', 'NOT') for t in tokens)
+    
+    if not has_explicit_boolean:
+        terms = [t.strip('"') for t in tokens if t not in ('(', ')')]
+        if not terms:
+            return ""
+        if len(terms) == 1:
+            return f"Se buscarán publicaciones que incluyan la palabra **'{terms[0]}'**."
+        else:
+            terms_fmt = ", ".join([f"**'{t}'**" for t in terms[:-1]]) + f" y **'{terms[-1]}'**"
+            return f"Se buscarán publicaciones que incluyan las palabras: {terms_fmt}."
+            
+    and_terms = []
+    or_terms = []
+    not_terms = []
+    
+    current_op = "AND"
+    for token in tokens:
+        upper_tok = token.upper()
+        if upper_tok in ('AND', 'OR', 'NOT'):
+            current_op = upper_tok
+        elif token not in ('(', ')'):
+            term = token.strip('"')
+            if current_op == "NOT":
+                not_terms.append(term)
+            elif current_op == "OR":
+                or_terms.append(term)
+            else:
+                and_terms.append(term)
+            current_op = "AND"
+            
+    parts = []
+    if and_terms:
+        if len(and_terms) == 1:
+            parts.append(f"incluyan obligatoriamente **'{and_terms[0]}'**")
+        else:
+            and_str = " Y ".join([f"**'{t}'**" for t in and_terms])
+            parts.append(f"incluyan obligatoriamente las palabras {and_str}")
+            
+    if or_terms:
+        or_str = " O ".join([f"**'{t}'**" for t in or_terms])
+        parts.append(f"contengan {or_str}")
+        
+    if not_terms:
+        not_str = " ni ".join([f"**'{t}'**" for t in not_terms])
+        parts.append(f"NO incluyan {not_str}")
+        
+    if not parts:
+        return f"Búsqueda configurada: `{q_str}`"
+        
+    return "Se buscarán publicaciones que " + ", y ".join(parts) + "."
+
 def contains_keywords(text, keywords):
     found = set()
     any_matched = False
@@ -502,7 +568,6 @@ class RadioScraper:
                 "-analyzeduration", "1000000",
                 "-fflags", "nobuffer",
                 "-flags", "low_delay",
-                "-dns_entry_timeout", "3000000",
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
@@ -2200,7 +2265,6 @@ class TVScraper:
                 "-analyzeduration", "1000000",
                 "-fflags", "nobuffer",
                 "-flags", "low_delay",
-                "-dns_entry_timeout", "3000000",
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
