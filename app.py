@@ -1438,6 +1438,20 @@ def render_right_column():
         if hasattr(engine, "uptime_status") and engine.uptime_status:
             st.markdown("---")
             st.markdown("### <i class='fa-solid fa-circle-nodes'></i> Uptime de Medios", unsafe_allow_html=True)
+            
+            # Check if there are any offline channels
+            offline_count = sum(1 for info in engine.uptime_status.values() if info.get("status") in ("Offline", "No en vivo"))
+            if offline_count > 0:
+                if st.button(f"🔄 Reintentar {offline_count} Canales Offline", key="btn_retry_all_offline", use_container_width=True):
+                    with st.spinner(f"Reintentando conexión para {offline_count} canales caídos..."):
+                        rec, total = engine.retry_all_offline()
+                        if rec > 0:
+                            st.toast(f"✅ {rec}/{total} canales restablecidos a Online", icon="🟢")
+                        else:
+                            st.toast(f"⚠️ No se pudo restablecer ninguno de los {total} canales.", icon="🔴")
+                    st.rerun()
+                st.write("")
+
             for name, info in sorted(engine.uptime_status.items()):
                 status = info["status"]
                 err = info["error"]
@@ -1450,7 +1464,19 @@ def render_right_column():
                 else:
                     status_badge = f"<span style='color:#e74c3c; font-weight:bold;' title='{err}'>🔴 Offline</span>"
                 
-                st.markdown(f"{name}: {status_badge}", unsafe_allow_html=True)
+                col_info, col_act = st.columns([0.75, 0.25])
+                with col_info:
+                    st.markdown(f"{name}: {status_badge}", unsafe_allow_html=True)
+                with col_act:
+                    if st.button("🔄", key=f"btn_retry_single_{name}", help=f"Reintentar probar conexión con {name}"):
+                        with st.spinner(f"Probando {name}..."):
+                            success, msg = engine.retry_scraper(name)
+                            if success:
+                                st.toast(f"✅ {name} restablecido a Online", icon="🟢")
+                            else:
+                                st.toast(f"⚠️ {name} sigue inactivo: {msg[:60]}", icon="🔴")
+                        st.rerun()
+
                 if status in ("Online", "Simulando"):
                     url = info.get("url")
                     media_type = info.get("type")

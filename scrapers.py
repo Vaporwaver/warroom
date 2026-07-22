@@ -2842,3 +2842,74 @@ class MonitoringEngine:
                 alert_queued = alert.copy()
                 alert_queued["client_id"] = client["id"]
                 self.alerts_queue.put(alert_queued)
+
+    def retry_scraper(self, name):
+        """Ejecuta de forma individual y síncrona el scraper especificado por 'name' y actualiza su uptime_status."""
+        target_scraper = None
+        for scraper in self.scrapers:
+            if get_scraper_display_name(scraper) == name:
+                target_scraper = scraper
+                break
+                
+        if not target_scraper:
+            return False, f"Scraper '{name}' no encontrado"
+
+        cls_name = target_scraper.__class__.__name__
+        url = getattr(target_scraper, "tunein_url", None) or getattr(target_scraper, "stream_url", None)
+        media_type = "Radio" if cls_name == "RadioScraper" else ("TV" if cls_name == "TVScraper" else "Other")
+
+        self.log_event(f"🔄 Reintentando conexión individual para {name}...")
+        try:
+            if self.force_simulation:
+                mentions = target_scraper.get_simulated_mention()
+            else:
+                if cls_name == "YouTubeScraper":
+                    mentions = target_scraper.scrape(self)
+                elif cls_name in ("RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper"):
+                    mentions = target_scraper.scrape(self)
+                elif cls_name in ("RadioScraper", "TVScraper"):
+                    mentions = target_scraper.scrape()
+                else:
+                    mentions = None
+                    
+            if mentions:
+                self._process_mentions(mentions)
+                
+            self.uptime_status[name] = {
+                "status": "Simulando" if self.force_simulation else "Online",
+                "last_checked": time.time(),
+                "error": "",
+                "url": url,
+                "type": media_type
+            }
+            self.log_event(f"✅ Reintento exitoso para {name}: Estado actualizado a Online.")
+            return True, "Online"
+        except Exception as exc:
+            exc_str = str(exc)
+            is_not_live = "no está transmitiendo en vivo actualmente" in exc_str or "is not live" in exc_str
+            new_status = "No en vivo" if is_not_live else "Offline"
+            
+            self.uptime_status[name] = {
+                "status": new_status,
+                "last_checked": time.time(),
+                "error": exc_str,
+                "url": url,
+                "type": media_type
+            }
+            self.log_event(f"❌ Reintento para {name} falló: {exc_str}")
+            return False, exc_str
+
+    def retry_all_offline(self):
+        """Reintenta secuencialmente todos los canales que se encuentran actualmente Offline."""
+        offline_names = [name for name, info in self.uptime_status.items() if info.get("status") in ("Offline", "No en vivo")]
+        if not offline_names:
+            return 0, 0
+            
+        self.log_event(f"🔄 Iniciando reintento masivo para {len(offline_names)} canales offline...")
+        recovered = 0
+        for name in offline_names:
+            success, _ = self.retry_scraper(name)
+            if success:
+                recovered += 1
+        self.log_event(f"✅ Reintento masivo completado: {recovered}/{len(offline_names)} canales restablecidos.")
+        return recovered, len(offline_names)
