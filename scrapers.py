@@ -139,6 +139,23 @@ def extract_rss_domain(url):
     except Exception:
         return "RSS"
 
+def is_direct_stream_url(url):
+    """Retorna True si la URL apunta a un stream directo (m3u8, mp3, aac, etc.) que no requiere resolución previa con yt-dlp."""
+    if not url:
+        return False
+    url_lower = url.lower()
+    if "youtube.com" in url_lower or "youtu.be" in url_lower:
+        return False
+    direct_patterns = [
+        ".m3u8", ".mp3", ".aac", ".pls", ".m3u", "/stream",
+        "radiojar.com", "zeno.fm", "rcast.net", "hostdime.com",
+        "plugstreaming.com", "livecastnet.com", "brlogic.com",
+        "grupointernet.com", "cdnradio.com.do", "surfernetwork.com",
+        "streamprolive.com", "essastream.com", "radiordomi.com",
+        "streamlock.net", "telecablecentral.com.do", "streamhoster.com"
+    ]
+    return any(p in url_lower for p in direct_patterns)
+
 def clean_ffmpeg_error(stderr_bytes):
     try:
         stderr_str = stderr_bytes.decode('utf-8', errors='ignore')
@@ -437,25 +454,26 @@ class RadioScraper:
         import tempfile
         temp_audio = None
         try:
-            # 1. Resolve URL with yt-dlp
-            import yt_dlp
-            ydl_opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'skip_download': True,
-                'socket_timeout': 45,
-                'logger': YtdlSilentLogger(),
-            }
+            # 1. Resolve URL with yt-dlp (Only if not a direct stream URL)
             stream_url = self.tunein_url
-            try:
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(self.tunein_url, download=False)
-                    if 'url' in info:
-                        stream_url = info['url']
-                    elif 'formats' in info and len(info['formats']) > 0:
-                        stream_url = info['formats'][0]['url']
-            except Exception:
-                pass
+            if not is_direct_stream_url(self.tunein_url):
+                try:
+                    import yt_dlp
+                    ydl_opts = {
+                        'quiet': True,
+                        'no_warnings': True,
+                        'skip_download': True,
+                        'socket_timeout': 15,
+                        'logger': YtdlSilentLogger(),
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(self.tunein_url, download=False)
+                        if 'url' in info:
+                            stream_url = info['url']
+                        elif 'formats' in info and len(info['formats']) > 0:
+                            stream_url = info['formats'][0]['url']
+                except Exception:
+                    pass
 
             # 2. Check ffmpeg and record
             ffmpeg_bin = get_ffmpeg_path()
@@ -480,6 +498,11 @@ class RadioScraper:
                 cmd += ["-user_agent", user_agent]
                 
             cmd += [
+                "-probesize", "32768",
+                "-analyzeduration", "1000000",
+                "-fflags", "nobuffer",
+                "-flags", "low_delay",
+                "-dns_entry_timeout", "3000000",
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
@@ -2108,40 +2131,40 @@ class TVScraper:
         temp_video = None
         temp_audio = None
         try:
-            # 1. Resolve URL with yt-dlp
-            import yt_dlp
-            ydl_opts = {
-                'quiet': True,
-                'no_warnings': True,
-                'skip_download': True,
-                'socket_timeout': 45,
-                'logger': YtdlSilentLogger(),
-            }
-            is_youtube = "youtube.com" in self.stream_url or "youtu.be" in self.stream_url
+            # 1. Resolve URL with yt-dlp (Only for YouTube or non-direct stream URLs)
+            is_youtube = "youtube.com" in self.stream_url.lower() or "youtu.be" in self.stream_url.lower()
             resolved_url = None
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    info = ydl.extract_info(self.stream_url, download=False)
-                    if 'url' in info:
-                        resolved_url = info['url']
-                    elif 'formats' in info and len(info['formats']) > 0:
-                        # Intentar buscar formato HLS directo (.m3u8) para ffmpeg
-                        for f in info['formats']:
-                            if f.get('protocol') == 'm3u8_native' or '.m3u8' in f.get('url', ''):
-                                resolved_url = f['url']
-                                break
-                        if not resolved_url:
-                            resolved_url = info['formats'][0]['url']
-                except Exception as e:
-                    if is_youtube:
-                        err_msg = str(e)
-                        if "not currently live" in err_msg or "is not live" in err_msg:
-                            raise Exception("El canal de YouTube no está transmitiendo en vivo actualmente.")
-                        else:
-                            raise Exception(f"No se pudo resolver la transmisión en vivo de YouTube: {err_msg}")
-                    # Para otros streams, simplemente ignorar y probar con URL original
-                    pass
-                    
+            
+            if is_youtube or not is_direct_stream_url(self.stream_url):
+                import yt_dlp
+                ydl_opts = {
+                    'quiet': True,
+                    'no_warnings': True,
+                    'skip_download': True,
+                    'socket_timeout': 15,
+                    'logger': YtdlSilentLogger(),
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    try:
+                        info = ydl.extract_info(self.stream_url, download=False)
+                        if 'url' in info:
+                            resolved_url = info['url']
+                        elif 'formats' in info and len(info['formats']) > 0:
+                            for f in info['formats']:
+                                if f.get('protocol') == 'm3u8_native' or '.m3u8' in f.get('url', ''):
+                                    resolved_url = f['url']
+                                    break
+                            if not resolved_url:
+                                resolved_url = info['formats'][0]['url']
+                    except Exception as e:
+                        if is_youtube:
+                            err_msg = str(e)
+                            if "not currently live" in err_msg or "is not live" in err_msg:
+                                raise Exception("El canal de YouTube no está transmitiendo en vivo actualmente.")
+                            else:
+                                raise Exception(f"No se pudo resolver la transmisión en vivo de YouTube: {err_msg}")
+                        pass
+                        
             if not resolved_url:
                 if is_youtube:
                     raise Exception("No se pudo obtener la URL de transmisión en vivo de YouTube.")
@@ -2173,6 +2196,11 @@ class TVScraper:
                 cmd_video += ["-user_agent", user_agent]
                 
             cmd_video += [
+                "-probesize", "32768",
+                "-analyzeduration", "1000000",
+                "-fflags", "nobuffer",
+                "-flags", "low_delay",
+                "-dns_entry_timeout", "3000000",
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
@@ -2577,7 +2605,7 @@ class MonitoringEngine:
         # Instantiate Scrapers
         self.scrapers = []
         for r in self.radio_channels:
-            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=60, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
         for yt in self.youtube_channels:
             self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
         for ig in self.instagram_channels:
@@ -2623,7 +2651,7 @@ class MonitoringEngine:
             for rss in self.rss_feeds:
                 self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:
-            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=60, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
             
         self.analyzer = OllamaAnalyzer(self.ollama_model, api_mode=self.ai_mode, credentials_path=self.google_vision_credentials, api_key=self.google_gemini_api_key)
 
