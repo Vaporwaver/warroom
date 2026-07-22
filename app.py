@@ -1835,7 +1835,8 @@ with col_left:
                             title = metadata.get("title", "Artículo de RSS")
                             st.markdown(f"📰 **Artículo:** `{title}`")
                             if post_url:
-                                st.link_button("📰 Leer Artículo en Somos Pueblo", post_url)
+                                rss_name = alert.get("source", "").replace("RSS (", "").rstrip(")").strip() or "la Fuente"
+                                st.link_button(f"📰 Leer Artículo en {rss_name}", post_url)
                                 
                         # Render st.audio player if audio path exists for this mention
                         audio_path = alert.get("audio_path")
