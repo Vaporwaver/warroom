@@ -677,7 +677,7 @@ if not st.session_state.monitoring_active:
             facebook_active=st.session_state.get("media_facebook_active", True),
             rss_feeds=rss_list,
             tv_channels=tv_list,
-            scan_interval=st.session_state.get("scan_interval_val", 30),
+            scan_interval=st.session_state.get("scan_interval_val", 0),
             force_simulation=st.session_state.force_simulation,
             whisper_model=st.session_state.get("whisper_model_val", "tiny"),
             ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
@@ -716,12 +716,13 @@ st.session_state.force_simulation = st.sidebar.toggle(
 
 st.sidebar.slider(
     "Frecuencia de Escaneo (segundos)",
-    min_value=10,
+    min_value=0,
     max_value=120,
-    value=30,
+    value=0,
     step=5,
     key="scan_interval_val",
-    disabled=st.session_state.monitoring_active
+    disabled=st.session_state.monitoring_active,
+    help="0 segundos = Monitoreo continuo e ininterrumpido sin pausas entre ciclos."
 )
 
 st.sidebar.selectbox(

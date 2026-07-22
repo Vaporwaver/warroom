@@ -2630,7 +2630,7 @@ def clean_html_text(raw_html):
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=30, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO", transcription_mode="Local (Whisper)", ai_mode="Local (Ollama/Gemma)", google_vision_credentials=None, google_gemini_api_key=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=0, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO", transcription_mode="Local (Whisper)", ai_mode="Local (Ollama/Gemma)", google_vision_credentials=None, google_gemini_api_key=None):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -2862,12 +2862,15 @@ class MonitoringEngine:
                                 ffmpeg_bin = get_ffmpeg_path()
                                 self.log_event(f"Error ejecutando scraper {name}: {exc} (ffmpeg: `{ffmpeg_bin}`)")
             
-            self.log_event("Ciclo de monitoreo paralelo completado. Esperando intervalo...")
-            # Sleep in increments of 1 second checking stop event to remain responsive
-            for _ in range(int(self.scan_interval)):
-                if self.stop_event.is_set():
-                    break
-                time.sleep(1)
+            if self.scan_interval > 0:
+                self.log_event(f"Ciclo de monitoreo paralelo completado. Esperando intervalo ({self.scan_interval}s)...")
+                # Sleep in increments of 1 second checking stop event to remain responsive
+                for _ in range(int(self.scan_interval)):
+                    if self.stop_event.is_set():
+                        break
+                    time.sleep(1)
+            else:
+                self.log_event("Ciclo de monitoreo paralelo completado. Reanudando inmediatamente el siguiente ciclo...")
 
     def _process_mentions(self, mentions):
         if not mentions:
