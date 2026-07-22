@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Warroom Cookie Extractor",
+  "name": "Pulse Metrics Cookie Extractor",
   "version": "1.0.0",
-  "description": "Extrae de forma rápida y segura las cookies para los scrapers de Warroom.",
+  "description": "Extrae de forma rápida y segura las cookies para los scrapers de Pulse Metrics.",
   "permissions": [
     "cookies"
   ],

@@ -60,11 +60,11 @@ El motor de RSS (`RSSScraper`) puede leer estos enlaces directamente en segundo 
 
 ---
 
-## ⚙️ Cómo Configurarlos en el War Room
+## ⚙️ Cómo Configurarlos en Pulse Metrics
 
 El motor de prensa escrita del sistema lee estos feeds y los analiza de forma automática:
 
-1. Ingrese a la barra lateral del War Room (pestaña central en modo reposo).
+1. Ingrese a la barra lateral del Pulse Metrics (pestaña central en modo reposo).
 2. Localice el área de texto **"Feeds RSS (URLs)"**.
 3. Pegue las URLs deseadas (una por línea).
 4. El sistema iniciará la descarga en paralelo de las últimas publicaciones en cada ciclo de monitoreo (coincidiendo con las palabras clave).

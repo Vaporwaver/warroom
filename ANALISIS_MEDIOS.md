@@ -90,7 +90,7 @@ El motor de Radio (`RadioScraper`) graba audio digital a través de enlaces Icec
 
 ## ⚙️ Reglas de Configuración para el Operador
 
-Para ingresar estos canales en el panel de control lateral del War Room, siga este formato:
+Para ingresar estos canales en el panel de control lateral del Pulse Metrics, siga este formato:
 
 1. **Emisoras de Radio (Barra Lateral > "Emisoras de Radio (Nombre \| URL)")**:
    Ingrese cada emisora en una línea usando el formato `Nombre Emisora | URL de Streaming`.

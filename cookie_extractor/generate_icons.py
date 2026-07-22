@@ -45,26 +45,28 @@ def generate_icon(size):
     line_color = (255, 255, 255, 255)
     line_width = max(1, int(size * 0.08))
     
-    # Draw 'W'
-    # Coordinates for 'W'
-    w_width = size * 0.35
-    w_height = size * 0.25
-    top_y = center - w_height / 2
-    bot_y = center + w_height / 2
-    left_x = center - w_width / 2
-    right_x = center + w_width / 2
+    # Draw 'P'
+    # Coordinates for 'P'
+    p_width = size * 0.3
+    p_height = size * 0.35
+    top_y = center - p_height / 2
+    bot_y = center + p_height / 2
+    left_x = center - p_width / 2
+    right_x = center + p_width / 2
+    mid_y = center
     
-    points = [
+    # Vertical spine
+    draw.line([(left_x, top_y), (left_x, bot_y)], fill=line_color, width=line_width, joint="round")
+    
+    # Loop of P (using a series of lines to look stylized / geometric)
+    loop_points = [
         (left_x, top_y),
-        (left_x + w_width * 0.25, bot_y),
-        (center, top_y + w_height * 0.2),
-        (right_x - w_width * 0.25, bot_y),
-        (right_x, top_y)
+        (right_x, top_y),
+        (right_x, mid_y),
+        (left_x, mid_y)
     ]
-    
-    # Draw the segments of W
-    for i in range(len(points) - 1):
-        draw.line([points[i], points[i+1]], fill=line_color, width=line_width, joint="round")
+    for i in range(len(loop_points) - 1):
+        draw.line([loop_points[i], loop_points[i+1]], fill=line_color, width=line_width, joint="round")
         
     return image
 

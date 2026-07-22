@@ -1,7 +1,7 @@
 @echo off
-title Iniciar War Room - Monitoreo con IA
+title Iniciar Pulse Metrics - Monitoreo con IA
 echo =======================================================
-echo     INICIANDO WAR ROOM - MONITOREO CON IA
+echo     INICIANDO PULSE METRICS - MONITOREO CON IA
 echo =======================================================
 echo.
 

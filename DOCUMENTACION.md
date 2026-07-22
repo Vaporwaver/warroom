@@ -1,6 +1,6 @@
-# 📝 Documentación del Sistema: War Room de Monitoreo de Medios con IA
+# 📝 Documentación del Sistema: Pulse Metrics de Monitoreo de Medios con IA
 
-Esta documentación detalla la arquitectura, el diseño técnico, las fuentes de monitoreo y los procedimientos de despliegue del sistema **War Room - Monitoreo de Medios con Inteligencia Artificial**. Este tablero web premium permite capturar, clasificar y reportar menciones críticas en tiempo real desde múltiples canales analógicos y digitales, operando de forma 100% local y asíncrona.
+Esta documentación detalla la arquitectura, el diseño técnico, las fuentes de monitoreo y los procedimientos de despliegue del sistema **Pulse Metrics - Monitoreo de Medios con Inteligencia Artificial**. Este tablero web premium permite capturar, clasificar y reportar menciones críticas en tiempo real desde múltiples canales analógicos y digitales, operando de forma 100% local y asíncrona.
 
 ---
 
@@ -161,7 +161,7 @@ El panel **Generador de Reportes** permite exportar el trabajo del operador y en
 
 ## 👥 Arquitectura Multi-Cliente con IA y Reportes Personalizados
 
-El sistema War Room permite gestionar de manera simultánea e independiente múltiples clientes o marcas. Esto permite segmentar las palabras clave de búsqueda, los destinatarios de los reportes y el enfoque del análisis con Inteligencia Artificial.
+El sistema Pulse Metrics permite gestionar de manera simultánea e independiente múltiples clientes o marcas. Esto permite segmentar las palabras clave de búsqueda, los destinatarios de los reportes y el enfoque del análisis con Inteligencia Artificial.
 
 ### 1. Modelo de Datos SQLite
 - **Tabla `clients`**: Almacena de forma persistente los perfiles de los clientes, compuestos por su nombre, correos de envío de reportes, palabras clave de monitoreo y descripción contextual para la IA.

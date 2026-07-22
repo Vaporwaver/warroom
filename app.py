@@ -96,10 +96,10 @@ def test_smtp_connection(config):
         msg = MIMEMultipart()
         msg['From'] = user
         msg['To'] = ", ".join(to_emails)
-        msg['Subject'] = "War Room - Prueba de Conexión SMTP"
+        msg['Subject'] = "Pulse Metrics - Prueba de Conexión SMTP"
         
         body = (
-            "Este es un correo de prueba automático del sistema War Room Monitoreo.\n\n"
+            "Este es un correo de prueba automático del sistema Pulse Metrics Monitoreo.\n\n"
             "Si estás recibiendo esto, significa que la configuración del servidor SMTP es correcta y la conexión es exitosa.\n\n"
             "Detalles de la conexión:\n"
             f"- Servidor: {server}:{port}\n"
@@ -144,7 +144,7 @@ def send_email_report_thread(config, report_md, csv_data, ai_summary, override_t
         msg = MIMEMultipart()
         msg['From'] = user
         msg['To'] = ", ".join(to_emails)
-        msg['Subject'] = f"War Room - Reporte Ejecutivo de Monitoreo ({datetime.now().strftime('%Y-%m-%d')})"
+        msg['Subject'] = f"Pulse Metrics - Reporte Ejecutivo de Monitoreo ({datetime.now().strftime('%Y-%m-%d')})"
         
         html_body = f"""
         <html>
@@ -160,7 +160,7 @@ def send_email_report_thread(config, report_md, csv_data, ai_summary, override_t
         <body>
             <div class="container">
                 <div class="header">
-                    <h2 style="margin:0;">War Room - Monitoreo de Medios</h2>
+                    <h2 style="margin:0;">Pulse Metrics - Monitoreo de Medios</h2>
                 </div>
                 <p>Estimado/a cliente,</p>
                 <p>Adjunto a este correo encontrará el reporte consolidado diario correspondiente al monitoreo de prensa del día de hoy.</p>
@@ -173,8 +173,8 @@ def send_email_report_thread(config, report_md, csv_data, ai_summary, override_t
                 <p>El reporte incluye el desglose detallado de las menciones aprobadas de Radio, TV, YouTube, Instagram y Medios Digitales, así como sus estadísticas de cobertura y sentimiento correspondientes.</p>
                 
                 <div class="footer">
-                    Este es un reporte automático del sistema <strong>War Room Monitoreo</strong>.<br/>
-                    © {datetime.now().year} War Room Inc. Todos los derechos reservados.
+                    Este es un reporte automático del sistema <strong>Pulse Metrics Monitoreo</strong>.<br/>
+                    © {datetime.now().year} Pulse Metrics Inc. Todos los derechos reservados.
                 </div>
             </div>
         </body>
@@ -281,7 +281,7 @@ def upload_to_catbox(file_path):
 
 # Page Configuration
 st.set_page_config(
-    page_title="War Room - Monitoreo con IA",
+    page_title="Pulse Metrics - Monitoreo con IA",
     page_icon="📻",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -1488,7 +1488,7 @@ def render_right_column():
 
 
 # --- CENTRAL PANEL: Dashboard Visuals ---
-st.markdown("<h1 class='main-title'>War Room - Monitoreo de Medios con IA</h1>", unsafe_allow_html=True)
+st.markdown("<h1 class='main-title'>Pulse Metrics - Monitoreo de Medios con IA</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:#a0a0a0; font-size:1.1rem; margin-bottom:25px;'>Monitoreo local en vivo de Radio, YouTube e Instagram con procesamiento lingüístico inteligente local.</p>", unsafe_allow_html=True)
 
 # Selectbox for Active Client

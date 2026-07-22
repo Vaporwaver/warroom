@@ -1,7 +1,7 @@
 @echo off
-title Detener Todos los Procesos de War Room
+title Detener Todos los Procesos de Pulse Metrics
 echo =======================================================
-echo     DETENIENDO TODOS LOS PROCESOS DE WAR ROOM
+echo     DETENIENDO TODOS LOS PROCESOS DE PULSE METRICS
 echo =======================================================
 echo.
 

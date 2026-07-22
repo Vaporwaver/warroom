@@ -1,7 +1,7 @@
 @echo off
-title Instalador de Dependencias - War Room Monitoreo
+title Instalador de Dependencias - Pulse Metrics Monitoreo
 echo =======================================================
-echo     INSTALADOR DE DEPENDENCIAS - WAR ROOM MONITOREO
+echo     INSTALADOR DE DEPENDENCIAS - PULSE METRICS MONITOREO
 echo =======================================================
 echo.
 
