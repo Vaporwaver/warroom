@@ -13,6 +13,15 @@ import unicodedata
 import warnings
 import database
 
+DEFAULT_RSS_FEEDS = """https://news.google.com/rss?hl=es-419&gl=US&ceid=US:es-419
+https://listindiario.com/rss
+https://www.diariolibre.com/rss
+https://elnacional.com.do/feed/
+https://somospueblo.com/feed/
+https://remolacha.net/feed/
+https://hoy.com.do/feed/
+https://eldinero.com.do/feed/"""
+
 # Silent logger to suppress yt-dlp console error spam
 class YtdlSilentLogger:
     def debug(self, msg):

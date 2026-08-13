@@ -1561,7 +1561,7 @@ with col_left:
         with col_hdr_btn:
             if st.button("🔄 Re-escanear Medios Digitales", key="btn_rescan_digital_media_main", use_container_width=True, help="Re-escanea todos los feeds RSS y Google News para este cliente, incluyendo noticias publicadas en los últimos 14 días aunque ya hayan sido leídas."):
                 with st.spinner("Re-escaneando medios digitales y Google News (incluyendo historial de noticias)..."):
-                    rss_raw = st.session_state.get("rss_feeds_val", scrapers.DEFAULT_RSS_FEEDS)
+                    rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
                     rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
                     added, msg = scrapers.rescan_digital_media(
                         rss_feeds=rss_list,
@@ -2477,7 +2477,7 @@ with col_left:
                             rescan_btn_key = f"rescan_client_btn_{c['id']}"
                             if st.button("🔄 Escanear Noticias", key=rescan_btn_key, use_container_width=True, help="Escanea medios digitales de los últimos 14 días para este cliente sin saltarse noticias previas"):
                                 with st.spinner(f"Escaneando medios digitales para '{c['name']}'..."):
-                                    rss_raw = st.session_state.get("rss_feeds_val", scrapers.DEFAULT_RSS_FEEDS)
+                                    rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
                                     rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
                                     added, msg = scrapers.rescan_digital_media(
                                         rss_feeds=rss_list,
@@ -2678,7 +2678,7 @@ with col_left:
                                     matched_cl = next((cl for cl in all_cl if cl["name"] == form_name.strip()), None)
                                     target_id = matched_cl["id"] if matched_cl else None
                                     if target_id:
-                                        rss_raw = st.session_state.get("rss_feeds_val", scrapers.DEFAULT_RSS_FEEDS)
+                                        rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
                                         rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
                                         scrapers.rescan_digital_media(
                                             rss_feeds=rss_list,
