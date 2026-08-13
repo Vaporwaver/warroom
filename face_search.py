@@ -3,7 +3,87 @@ import cv2
 import numpy as np
 import requests
 import io
+import urllib.parse
+import re
 from PIL import Image
+
+def scraped_web_detection(image_bytes):
+    """
+    Performs visual web detection by uploading the query image to a temporary host
+    and scraping Bing Visual Search results without requiring Google Cloud API keys or billing.
+    Returns a dictionary with 'best_guess', 'entities', 'pages', or {'error': 'msg'} on error.
+    """
+    try:
+        from bs4 import BeautifulSoup
+        
+        # Step 1: Upload image to tmpfiles.org
+        files = {'file': ('query_image.jpg', image_bytes, 'image/jpeg')}
+        upload_resp = requests.post("https://tmpfiles.org/api/v1/upload", files=files, timeout=10)
+        if upload_resp.status_code != 200:
+            return {'error': f'Error al subir la imagen a host temporal: HTTP {upload_resp.status_code}'}
+        
+        data = upload_resp.json()
+        upload_url = data.get('data', {}).get('url')
+        if not upload_url:
+            return {'error': 'No se recibió la URL de la imagen subida.'}
+            
+        raw_image_url = upload_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+        
+        # Step 2: Scrape Bing Visual Search
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+        }
+        bing_search_url = f"https://www.bing.com/images/searchbyimage?cbir=sbi&imgurl={urllib.parse.quote(raw_image_url)}"
+        
+        resp = requests.get(bing_search_url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return {'error': f'Error al consultar servidor visual: HTTP {resp.status_code}'}
+            
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        best_guess = ""
+        entities = []
+        pages = []
+        
+        ignore_words = [
+            'ver más', 'imágenes parecidas', 'búsqueda visual', 'búsqueda por imagen', 
+            'informar sobre contenido no apropiado', 'privacidad y cookies', 'términos',
+            'iniciar sesión', 'filtros de búsqueda', 'configuración'
+        ]
+        
+        # Extract best guess or titles from elements
+        for tag in soup.find_all(['h2', 'h3', 'a', 'span']):
+            txt = tag.text.strip()
+            if txt and len(txt) > 3 and txt.lower() not in ignore_words:
+                if not best_guess and len(txt) > 4 and not txt.startswith('http'):
+                    best_guess = txt
+                elif txt not in [e['description'] for e in entities] and not txt.startswith('http'):
+                    entities.append({'description': txt, 'score': 0.85})
+                    
+        # Extract web pages / news matching the image
+        seen_urls = set()
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            title = a.text.strip() or a.get('title', '').strip()
+            if href.startswith('http') and not re.search(r'bing\.com|microsoft\.com|live\.com|live\.net|msn\.com', href, re.I):
+                if href not in seen_urls and len(title) > 4 and title.lower() not in ignore_words:
+                    seen_urls.add(href)
+                    pages.append({
+                        'url': href,
+                        'page_title': title
+                    })
+                    
+        if not best_guess and pages:
+            best_guess = pages[0]['page_title']
+            
+        return {
+            'best_guess': best_guess or "Coincidencias encontradas en la Web",
+            'entities': entities[:10],
+            'pages': pages[:15]
+        }
+    except Exception as e:
+        return {'error': f'Error en scraping visual: {str(e)}'}
 
 def google_vision_web_detection(image_bytes, credentials_path=None):
     """

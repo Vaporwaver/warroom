@@ -2201,9 +2201,9 @@ with col_left:
                 st.markdown("### 🌐 Búsqueda Visual Directa en la Web", unsafe_allow_html=True)
                 st.markdown("Busca noticias, menciones y páginas web donde aparezca esta imagen utilizando herramientas de búsqueda visual de motor de búsqueda:")
                 
-                col_lens, col_yandex = st.columns(2)
+                col_lens, col_yandex, col_scrape = st.columns(3)
                 with col_lens:
-                    if st.button("🔍 Generar Enlace de Búsqueda con Google Lens", use_container_width=True):
+                    if st.button("🔍 Enlace Google Lens", use_container_width=True):
                         with st.spinner("Subiendo foto de referencia y generando enlace de Google Lens..."):
                             lens_link = face_search.get_google_lens_link(image_bytes)
                         if lens_link:
@@ -2213,7 +2213,7 @@ with col_left:
                             st.warning("⚠️ No se pudo subir temporalmente la imagen a Google Lens. Reintenta en unos momentos.")
                             
                 with col_yandex:
-                    if st.button("🌐 Generar Enlace de Búsqueda con Yandex Visual", use_container_width=True):
+                    if st.button("🌐 Enlace Yandex Visual", use_container_width=True):
                         with st.spinner("Subiendo foto de referencia y generando enlace de Yandex..."):
                             yandex_link = face_search.get_yandex_link(image_bytes)
                         if yandex_link:
@@ -2221,6 +2221,11 @@ with col_left:
                             st.link_button("🔎 Abrir Búsqueda en Yandex Visual", yandex_link, use_container_width=True)
                         else:
                             st.warning("⚠️ No se pudo subir temporalmente la imagen a Yandex. Reintenta en unos momentos.")
+                            
+                with col_scrape:
+                    if st.button("🕵️ Scraping Visual Directo", use_container_width=True, type="primary", help="Busca coincidencias e importa páginas de noticias realizando scraping en tiempo real sin usar la API pagada de Google Cloud."):
+                        with st.spinner("Ejecutando scraping de búsqueda visual en la web (sin API)..."):
+                            st.session_state.web_search_results = face_search.scraped_web_detection(image_bytes)
 
                 st.markdown("---")
                 st.markdown("### <i class='fa-solid fa-key'></i> API Oficial: Google Cloud Vision (Auto-importación)", unsafe_allow_html=True)
@@ -2237,16 +2242,16 @@ with col_left:
                 # Button for Google Cloud Vision API Search
                 if st.button("🚀 Buscar con Google Cloud Vision API", use_container_width=True):
                     with st.spinner("Conectando con Google Cloud Vision API y ejecutando Web Detection..."):
-                        results = face_search.google_vision_web_detection(
+                        st.session_state.web_search_results = face_search.google_vision_web_detection(
                             image_bytes=image_bytes,
                             credentials_path=st.session_state.google_vision_credentials_val
                         )
                         
-                    if not results:
-                        st.info("ℹ️ No se detectaron coincidencias visuales ni entidades en portales de noticias o web con Google Cloud Vision API.")
-                    elif isinstance(results, dict) and 'error' in results:
-                        st.error(f"❌ Error al consultar la API de Google Cloud Vision: `{results['error']}`")
-                        st.info("💡 **Solución:** Activa la facturación (billing) en la consola de Google Cloud para esa API, o utiliza la **Búsqueda Visual Directa (Google Lens / Yandex)** arriba sin costo ni credenciales.")
+                results = st.session_state.get("web_search_results")
+                if results:
+                    if isinstance(results, dict) and 'error' in results:
+                        st.error(f"❌ Error al consultar la búsqueda visual: `{results['error']}`")
+                        st.info("💡 **Solución:** Puedes utilizar la **Búsqueda Visual Directa (Google Lens / Yandex)** o **Scraping Visual Directo** sin costo ni credenciales.")
                         
                         # Provide instant fallbacks
                         with st.spinner("Generando enlace directo de respaldo con Google Lens..."):
