@@ -160,6 +160,44 @@ def explain_boolean_query(query_str):
         
     return "Se buscarán publicaciones que " + ", y ".join(parts) + "."
 
+def explain_client_rules(keywords_list):
+    """
+    Explica en español claro y conciso las reglas de monitoreo configuradas para un cliente.
+    """
+    if not keywords_list:
+        return ""
+    
+    clean_kws = [k.strip().rstrip(',').strip() for k in keywords_list if k.strip()]
+    if not clean_kws:
+        return ""
+        
+    if len(clean_kws) == 1:
+        return explain_boolean_query(clean_kws[0])
+        
+    complex_rules = []
+    simple_terms = []
+    
+    for kw in clean_kws:
+        kw_u = kw.upper()
+        if any(b in kw_u for b in (" AND ", " OR ", " NOT ")):
+            complex_rules.append(kw)
+        else:
+            simple_terms.append(kw)
+            
+    rule_descs = []
+    if simple_terms:
+        if len(simple_terms) == 1:
+            rule_descs.append(f"la palabra **'{simple_terms[0]}'**")
+        else:
+            terms_fmt = ", ".join([f"**'{t}'**" for t in simple_terms[:-1]]) + f" o **'{simple_terms[-1]}'**"
+            rule_descs.append(f"cualquiera de las palabras: {terms_fmt}")
+            
+    for rule in complex_rules:
+        exp = explain_boolean_query(rule)
+        rule_descs.append(f"la condición **({rule})**")
+        
+    return f"Se detectarán publicaciones que contengan {', o bien '.join(rule_descs)}."
+
 def contains_keywords(text, keywords):
     found = set()
     any_matched = False

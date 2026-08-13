@@ -2532,20 +2532,21 @@ with col_left:
             current_action = selected_option
             if "last_form_action" not in st.session_state or st.session_state.last_form_action != current_action or "temp_client_keywords" not in st.session_state:
                 if edit_mode and target_client:
-                    raw_kws = [k.strip() for k in target_client["keywords"].split(",") if k.strip()]
+                    raw_kws = [k.strip().rstrip(',').strip() for k in target_client["keywords"].split(",") if k.strip()]
                     cleaned_kws = []
                     for k in raw_kws:
                         u = k.upper()
                         if (u.startswith("AND ") or u.startswith("OR ")) and cleaned_kws:
                             last = cleaned_kws.pop()
-                            cleaned_kws.append(f"{last} {k}".strip())
+                            cleaned_kws.append(f"{last} {k}".strip().rstrip(',').strip())
                         elif u.startswith("AND ") or u.startswith("OR "):
-                            c_k = re.sub(r'^(AND|OR)\s+', '', k, flags=re.I).strip()
+                            c_k = re.sub(r'^(AND|OR)\s+', '', k, flags=re.I).strip().rstrip(',').strip()
                             if c_k and c_k not in cleaned_kws:
                                 cleaned_kws.append(c_k)
                         else:
-                            if k not in cleaned_kws:
-                                cleaned_kws.append(k)
+                            k_c = k.rstrip(',').strip()
+                            if k_c and k_c not in cleaned_kws:
+                                cleaned_kws.append(k_c)
                     st.session_state.temp_client_keywords = cleaned_kws
                 else:
                     st.session_state.temp_client_keywords = []
@@ -2561,18 +2562,16 @@ with col_left:
                     # If input starts with an operator like "AND POLICIA NACIONAL" and we have a previous keyword tag
                     if (kw_u.startswith("AND ") or kw_u.startswith("OR ")) and st.session_state.temp_client_keywords:
                         last_kw = st.session_state.temp_client_keywords.pop()
-                        combined = f"{last_kw} {kw_raw}".strip()
+                        combined = f"{last_kw} {kw_raw}".strip().rstrip(',').strip()
                         st.session_state.temp_client_keywords.append(combined)
                     else:
-                        # Only split by comma if not containing boolean operators (AND, OR, NOT)
-                        if any(b in kw_u for b in (" AND ", " OR ", " NOT ")):
-                            kws_split = [kw_raw]
-                        else:
-                            kws_split = [k.strip() for k in kw_raw.split(",") if k.strip()]
-                        for k in kws_split:
-                            c_k = re.sub(r'^(AND|OR)\s+', '', k, flags=re.I).strip() if not any(b in k.upper() for b in (" AND ", " OR ", " NOT ")) else k.strip()
-                            if c_k and c_k not in st.session_state.temp_client_keywords:
-                                st.session_state.temp_client_keywords.append(c_k)
+                        # Split by comma so users can paste lists of keywords (e.g. "Plaza, Tunel, Faride AND Raful, PRM")
+                        raw_parts = [p.strip().rstrip(',').strip() for p in kw_raw.split(",") if p.strip()]
+                        for part in raw_parts:
+                            part_clean = re.sub(r'^(AND|OR)\s+', '', part, flags=re.I).strip() if not any(b in part.upper() for b in (" AND ", " OR ", " NOT ")) else part.strip()
+                            part_clean = part_clean.rstrip(',').strip()
+                            if part_clean and part_clean not in st.session_state.temp_client_keywords:
+                                st.session_state.temp_client_keywords.append(part_clean)
                     # Clear input safely in the callback
                     st.session_state.new_kw_input_field = ""
 
@@ -2643,8 +2642,7 @@ with col_left:
                             st.rerun()
 
                 # Generar explicación en español del filtro completo del cliente
-                full_query = " OR ".join([f"({kw})" if any(b in kw for b in (" AND ", " OR ", " NOT ")) else kw for kw in st.session_state.temp_client_keywords])
-                exp_total = scrapers.explain_boolean_query(full_query)
+                exp_total = scrapers.explain_client_rules(st.session_state.temp_client_keywords)
                 if exp_total:
                     st.markdown(f"<div style='background: rgba(16, 185, 129, 0.12); border-left: 3px solid #10b981; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 10px; margin-bottom: 12px; color: #f8fafc;'>📌 <strong>Filtro Final del Cliente:</strong> {exp_total}</div>", unsafe_allow_html=True)
             else:
