@@ -597,12 +597,16 @@ class RadioScraper:
                 "-fflags", "nobuffer",
                 "-flags", "low_delay",
                 "-reconnect", "1",
+                "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "5",
-                "-timeout", "10000000",
-                "-rw_timeout", "15000000",
-                "-i", stream_url, "-t", str(self.duration),
-                "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", temp_audio
+                "-reconnect_delay_max", "3",
+                "-t", "20",
+                "-i", stream_url,
+                "-vn",
+                "-acodec", "pcm_s16le",
+                "-ar", "16000",
+                "-ac", "1",
+                temp_audio
             ]
             
             # Execute ffmpeg with a timeout to avoid freezing
@@ -1732,8 +1736,8 @@ class FacebookScraper:
                     fb_q = re.compile(r'\bnot\b', re.IGNORECASE).sub('NOT', fb_q)
                     
                     url = f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(fb_q)}"
-                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                    page.wait_for_timeout(3000) # Give extra time for rendering
+                    page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                    page.wait_for_timeout(1500) # Give extra time for rendering
                     
                     # Check for login redirect or banner
                     if "login" in page.url.lower() and not self.cookies_str:
@@ -1741,13 +1745,13 @@ class FacebookScraper:
                         browser.close()
                         return all_mentions
                     
-                    # Scroll down multiple times to load a larger list of search results
-                    for i in range(5):
+                    # Fast scroll down to load search results
+                    for i in range(2):
                         if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
                             break
                         try:
                             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                            page.wait_for_timeout(2000)
+                            page.wait_for_timeout(1000)
                         except Exception:
                             pass
                     
@@ -2086,19 +2090,20 @@ class RSSScraper:
                 engine.log_event(msg)
                 
         try:
-            import urllib.request
+            import requests
             import xml.etree.ElementTree as ET
             import html
             import hashlib
             
             log(f"Iniciando escaneo de Medios Digitales ({self.feed_name})...")
             
-            req = urllib.request.Request(
-                self.feed_url, 
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            )
-            with urllib.request.urlopen(req, timeout=45.0) as response:
-                xml_data = response.read()
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'es-419,es;q=0.9,en;q=0.8'
+            }
+            resp = requests.get(self.feed_url, headers=headers, timeout=25.0)
+            xml_data = resp.content
                 
             # Clean XML string to avoid strict parsing issues
             xml_str = xml_data.decode('utf-8', errors='replace')
