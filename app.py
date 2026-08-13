@@ -12,6 +12,7 @@ import database
 import importlib
 importlib.reload(database)
 importlib.reload(scrapers)
+scrapers.prevent_system_sleep(True)
 import subprocess
 import tempfile
 import base64
