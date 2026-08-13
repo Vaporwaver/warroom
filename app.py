@@ -2558,7 +2558,21 @@ with col_left:
             current_action = selected_option
             if "last_form_action" not in st.session_state or st.session_state.last_form_action != current_action or "temp_client_keywords" not in st.session_state:
                 if edit_mode and target_client:
-                    st.session_state.temp_client_keywords = [k.strip() for k in target_client["keywords"].split(",") if k.strip()]
+                    raw_kws = [k.strip() for k in target_client["keywords"].split(",") if k.strip()]
+                    cleaned_kws = []
+                    for k in raw_kws:
+                        u = k.upper()
+                        if (u.startswith("AND ") or u.startswith("OR ")) and cleaned_kws:
+                            last = cleaned_kws.pop()
+                            cleaned_kws.append(f"{last} {k}".strip())
+                        elif u.startswith("AND ") or u.startswith("OR "):
+                            c_k = re.sub(r'^(AND|OR)\s+', '', k, flags=re.I).strip()
+                            if c_k and c_k not in cleaned_kws:
+                                cleaned_kws.append(c_k)
+                        else:
+                            if k not in cleaned_kws:
+                                cleaned_kws.append(k)
+                    st.session_state.temp_client_keywords = cleaned_kws
                 else:
                     st.session_state.temp_client_keywords = []
                 st.session_state.last_form_action = current_action
@@ -2569,11 +2583,22 @@ with col_left:
                     st.session_state.temp_client_keywords = []
                 kw_raw = st.session_state.get("new_kw_input_field", "").strip()
                 if kw_raw:
-                    # Separar por comas si por error meten comas
-                    kws_split = [k.strip() for k in kw_raw.split(",") if k.strip()]
-                    for k in kws_split:
-                        if k not in st.session_state.temp_client_keywords:
-                            st.session_state.temp_client_keywords.append(k)
+                    kw_u = kw_raw.upper()
+                    # If input starts with an operator like "AND POLICIA NACIONAL" and we have a previous keyword tag
+                    if (kw_u.startswith("AND ") or kw_u.startswith("OR ")) and st.session_state.temp_client_keywords:
+                        last_kw = st.session_state.temp_client_keywords.pop()
+                        combined = f"{last_kw} {kw_raw}".strip()
+                        st.session_state.temp_client_keywords.append(combined)
+                    else:
+                        # Only split by comma if not containing boolean operators (AND, OR, NOT)
+                        if any(b in kw_u for b in (" AND ", " OR ", " NOT ")):
+                            kws_split = [kw_raw]
+                        else:
+                            kws_split = [k.strip() for k in kw_raw.split(",") if k.strip()]
+                        for k in kws_split:
+                            c_k = re.sub(r'^(AND|OR)\s+', '', k, flags=re.I).strip() if not any(b in k.upper() for b in (" AND ", " OR ", " NOT ")) else k.strip()
+                            if c_k and c_k not in st.session_state.temp_client_keywords:
+                                st.session_state.temp_client_keywords.append(c_k)
                     # Clear input safely in the callback
                     st.session_state.new_kw_input_field = ""
 
