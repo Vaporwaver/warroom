@@ -31,6 +31,12 @@ class YtdlSilentLogger:
     def error(self, msg):
         pass
 
+YTDL_YOUTUBE_EXTRACTOR_ARGS = {
+    'youtube': {
+        'player_client': ['android', 'ios', 'tv', 'web']
+    }
+}
+
 # Initialize SQLite database
 database.initialize_db()
 
@@ -550,7 +556,8 @@ class RadioScraper:
                         'quiet': True,
                         'no_warnings': True,
                         'skip_download': True,
-                        'socket_timeout': 15,
+                        'socket_timeout': 20,
+                        'extractor_args': YTDL_YOUTUBE_EXTRACTOR_ARGS,
                         'logger': YtdlSilentLogger(),
                     }
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -770,6 +777,7 @@ class YouTubeScraper:
                 'playlistend': 100,  # Fetch top 100 videos to cover up to 2 weeks
                 'no_warnings': True,
                 'socket_timeout': 45,
+                'extractor_args': YTDL_YOUTUBE_EXTRACTOR_ARGS,
                 'logger': YtdlSilentLogger(),
             }
             video_ids = []
@@ -847,7 +855,7 @@ class YouTubeScraper:
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
                 is_too_old = False
                 try:
-                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 45, 'logger': YtdlSilentLogger()}) as ydl:
+                    with yt_dlp.YoutubeDL({'quiet': True, 'no_warnings': True, 'socket_timeout': 45, 'extractor_args': YTDL_YOUTUBE_EXTRACTOR_ARGS, 'logger': YtdlSilentLogger()}) as ydl:
                         video_info = ydl.extract_info(video_url, download=False)
                         ts = video_info.get('timestamp')
                         if ts:
@@ -950,14 +958,15 @@ class YouTubeScraper:
                         audio_filename = f"yt_audio_{video_id}"
                         temp_template = os.path.join(temp_dir, f"{audio_filename}.%(ext)s")
                         
-                        # We download only low quality audio to save bandwidth and speed up
+                        # We download only audio to save bandwidth and speed up
                         ydl_opts_audio = {
-                            'format': 'wa*[acodec=opus]/ba*[acodec=opus]/ba/wa', # Opus audio or best audio
+                            'format': 'ba/b/wa',
                             'outtmpl': temp_template,
                             'quiet': True,
                             'no_warnings': True,
-                            'max_filesize': 30 * 1024 * 1024, # Limit to 30MB max
-                            'socket_timeout': 45,
+                            'extractor_args': YTDL_YOUTUBE_EXTRACTOR_ARGS,
+                            'max_filesize': 40 * 1024 * 1024, # Limit to 40MB max
+                            'socket_timeout': 60,
                             'logger': YtdlSilentLogger(),
                         }
                         
@@ -2236,7 +2245,8 @@ class TVScraper:
                     'quiet': True,
                     'no_warnings': True,
                     'skip_download': True,
-                    'socket_timeout': 15,
+                    'socket_timeout': 20,
+                    'extractor_args': YTDL_YOUTUBE_EXTRACTOR_ARGS,
                     'logger': YtdlSilentLogger(),
                 }
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
