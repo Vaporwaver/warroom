@@ -1961,19 +1961,20 @@ class GoogleNewsScraper:
                                 publisher = parts[1].strip()
                                 
                         all_mentions.append({
-                            "source": f"📰 Google News ({publisher})",
+                            "source": f"Medios Digitales ({publisher})",
                             "text": f"{title}. {desc}".strip(),
                             "keywords": found_kws,
                             "timestamp": pub_dt.timestamp() if pub_dt else time.time(),
                             "identifier": identifier,
                             "simulated": False,
                             "metadata": {
-                                "post_url": link
+                                "post_url": link,
+                                "title": title
                             }
                         })
-                log(f"Búsqueda de '{keyword}' en Google News completada. {scanned_count} noticias nuevas analizadas.")
+                log(f"Búsqueda de '{keyword}' en Medios Digitales completada. {scanned_count} noticias nuevas analizadas.")
             except Exception as e:
-                log(f"Error buscando '{keyword}' en Google News: {str(e)}")
+                log(f"Error buscando '{keyword}' en Medios Digitales: {str(e)}")
                 
         return all_mentions
 
@@ -1997,7 +1998,7 @@ class GoogleNewsScraper:
         kw_for_source = found_kws[0] if found_kws else (self.keywords[0] if self.keywords else "noticia")
         
         return [{
-            "source": f"📰 Google News (Simulado)",
+            "source": f"Medios Digitales (Simulado)",
             "text": text,
             "keywords": found_kws,
             "timestamp": time.time(),
@@ -2043,7 +2044,7 @@ class RSSScraper:
             import html
             import hashlib
             
-            log(f"Iniciando escaneo de RSS ({self.feed_name})...")
+            log(f"Iniciando escaneo de Medios Digitales ({self.feed_name})...")
             
             req = urllib.request.Request(
                 self.feed_url, 
@@ -2059,7 +2060,7 @@ class RSSScraper:
             
             root = ET.fromstring(xml_str.encode('utf-8'))
             items = root.findall('.//item')
-            log(f"RSS ({self.feed_name}) parseado. {len(items)} noticias encontradas.")
+            log(f"Medios Digitales ({self.feed_name}) parseado. {len(items)} noticias encontradas.")
             
             mentions = []
             scanned_count = 0
@@ -2109,7 +2110,7 @@ class RSSScraper:
                 
                 if found_kws:
                     mentions.append({
-                        "source": f"RSS ({self.feed_name})",
+                        "source": f"Medios Digitales ({self.feed_name})",
                         "text": full_text.strip(),
                         "keywords": found_kws,
                         "timestamp": time.time(),
@@ -2121,11 +2122,11 @@ class RSSScraper:
                         }
                     })
                     
-            log(f"Escaneo de RSS ({self.feed_name}) completado. {scanned_count} noticias nuevas analizadas.")
+            log(f"Escaneo de Medios Digitales ({self.feed_name}) completado. {scanned_count} noticias nuevas analizadas.")
             return mentions
             
         except Exception as e:
-            log(f"Error raspando RSS en vivo ({self.feed_name}): {str(e)}")
+            log(f"Error raspando Medios Digitales en vivo ({self.feed_name}): {str(e)}")
             raise e
 
     def get_simulated_mention(self, diagnostic_msg=None):
@@ -2152,7 +2153,7 @@ class RSSScraper:
         identifier = f"rss_sim_{int(time.time())}"
         
         return [{
-            "source": f"RSS ({self.feed_name})",
+            "source": f"Medios Digitales ({self.feed_name})",
             "text": full_text,
             "keywords": found_kws,
             "timestamp": time.time(),
@@ -2506,7 +2507,9 @@ def get_scraper_display_name(scraper):
     elif cls_name == "FacebookScraper":
         return "📘 Facebook (Búsqueda)"
     elif cls_name == "RSSScraper":
-        return f"📰 RSS ({scraper.feed_name})"
+        return f"📰 Medios Digitales ({scraper.feed_name})"
+    elif cls_name == "GoogleNewsScraper":
+        return "📰 Medios Digitales (Google News)"
     return str(scraper)
 
 

@@ -707,13 +707,13 @@ st.sidebar.slider(
 )
 
 st.sidebar.selectbox(
-    "País de Monitoreo (Google News)",
+    "País de Monitoreo (Medios Digitales)",
     options=["República Dominicana (RD)", "Estados Unidos (US)", "España (ES)", "México (MX)"],
     key="engine_country_val",
     disabled=st.session_state.monitoring_active,
     on_change=save_config,
     args=("engine_country_val", "config_engine_country"),
-    help="Define la región para las búsquedas de Google News."
+    help="Define la región para la cobertura de medios digitales y noticias."
 )
 
 st.sidebar.selectbox(
@@ -723,7 +723,7 @@ st.sidebar.selectbox(
     disabled=st.session_state.monitoring_active,
     on_change=save_config,
     args=("engine_language_val", "config_engine_language"),
-    help="Define el idioma para Google News y transcripciones locales con Whisper."
+    help="Define el idioma para Medios Digitales y transcripciones locales con Whisper."
 )
 
 st.sidebar.selectbox(
@@ -1711,8 +1711,7 @@ with col_left:
                 elif "youtube" in source_lower: source_icon = '<i class="fa-brands fa-youtube" style="color: #e74c3c;"></i>'
                 elif "twitter" in source_lower: source_icon = '<i class="fa-brands fa-x-twitter" style="color: #f1f2f6;"></i>'
                 elif "facebook" in source_lower: source_icon = '<i class="fa-brands fa-facebook" style="color: #1877f2;"></i>'
-                elif "google news" in source_lower: source_icon = '<i class="fa-solid fa-newspaper" style="color: #ee802f;"></i>'
-                elif "rss" in source_lower: source_icon = '<i class="fa-solid fa-rss" style="color: #f1c40f;"></i>'
+                elif any(k in source_lower for k in ("medios digitales", "rss", "google news")): source_icon = '<i class="fa-solid fa-rss" style="color: #f1c40f;"></i>'
                 else: source_icon = '<i class="fa-brands fa-instagram" style="color: #e1306c;"></i>'
                 
                 # Select Sentiment Style classes and badge
