@@ -2933,3 +2933,84 @@ class MonitoringEngine:
                 recovered += 1
         self.log_event(f"✅ Reintento masivo completado: {recovered}/{len(offline_names)} canales restablecidos.")
         return recovered, len(offline_names)
+
+
+def rescan_digital_media(rss_feeds=None, language="es", country="DO", ollama_model="gemma4:e2b", target_client_id=None, log_callback=None):
+    """
+    Realiza un escaneo forzado e integral de feeds RSS y Google News,
+    limpiando el historial de noticias procesadas para capturar menciones
+    de clientes nuevos o palabras clave actualizadas sin saltarse noticias previas.
+    """
+    def _log(msg):
+        if log_callback:
+            log_callback(msg)
+            
+    _log("🔄 Limpiando historial de noticias procesadas de medios digitales...")
+    deleted = database.clear_rss_processed_cache()
+    _log(f"✅ Caché reiniciado ({deleted} registros anteriores liberados).")
+    
+    clients = database.get_all_clients()
+    if target_client_id:
+        active_clients = [c for c in clients if c["id"] == target_client_id and c.get("enabled", 1)]
+    else:
+        active_clients = [c for c in clients if c.get("enabled", 1)]
+        
+    if not active_clients:
+        return 0, "No hay clientes activos para escanear."
+        
+    # Gather union of keywords
+    all_kws = []
+    for c in active_clients:
+        for k in c.get("keywords", "").split(","):
+            k_clean = k.strip()
+            if k_clean and k_clean not in all_kws:
+                all_kws.append(k_clean)
+                
+    if not all_kws:
+        return 0, "No hay palabras clave configuradas en los clientes seleccionados."
+
+    _log(f"🔎 Analizando {len(all_kws)} palabras clave en feeds RSS y Google News...")
+    analyzer = OllamaAnalyzer(ollama_model)
+    scrapers_list = []
+    
+    # 1. Google News Scraper
+    scrapers_list.append(GoogleNewsScraper(keywords=all_kws, language=language, country=country))
+    
+    # 2. RSS Feeds
+    if rss_feeds:
+        for feed in rss_feeds:
+            feed = feed.strip()
+            if feed:
+                scrapers_list.append(RSSScraper(feed_url=feed, keywords=all_kws))
+                
+    total_added = 0
+    for sc in scrapers_list:
+        try:
+            mentions = sc.scrape()
+            for m in mentions:
+                for client in active_clients:
+                    client_kws = [k.strip() for k in client.get("keywords", "").split(",") if k.strip()]
+                    matched_kws = contains_keywords(m["text"], client_kws)
+                    if matched_kws:
+                        analysis = analyzer.analyze(m["text"])
+                        alert = {
+                            "source": m["source"],
+                            "text": m["text"],
+                            "keywords": matched_kws,
+                            "timestamp": m["timestamp"],
+                            "identifier": m["identifier"],
+                            "sentimiento": analysis.get("sentimiento", "Neutral"),
+                            "resumen": analysis.get("resumen", "Sin resumen."),
+                            "ai_analyzed": analysis.get("ai_analyzed", False),
+                            "model_used": analysis.get("model_used", ollama_model),
+                            "metadata": m.get("metadata", {}),
+                            "simulated": False
+                        }
+                        database.save_alert(alert, client_id=client["id"], status='pending')
+                        total_added += 1
+                        _log(f"📌 Mención agregada para cliente '{client['name']}': {m['source']}")
+        except Exception as e:
+            _log(f"⚠️ Error en scraper: {e}")
+            
+    _log(f"🎉 Escaneo completado. {total_added} menciones agregadas.")
+    return total_added, f"Se encontraron y agregaron {total_added} menciones en medios digitales."

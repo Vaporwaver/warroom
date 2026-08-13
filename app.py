@@ -1554,6 +1554,29 @@ with col_left:
     tab_validation, tab_report, tab_face, tab_clients = st.tabs(["📥 Bandeja de Validación", "📝 Generador de Reportes", "🔍 Búsqueda Facial", "👥 Clientes"])
     
     with tab_validation:
+        # Header toolbar with Rescan button
+        col_hdr_title, col_hdr_btn = st.columns([0.55, 0.45])
+        with col_hdr_title:
+            st.markdown("#### <i class='fa-solid fa-inbox'></i> Bandeja de Alertas", unsafe_allow_html=True)
+        with col_hdr_btn:
+            if st.button("🔄 Re-escanear Medios Digitales", key="btn_rescan_digital_media_main", use_container_width=True, help="Re-escanea todos los feeds RSS y Google News para este cliente, incluyendo noticias publicadas en los últimos 14 días aunque ya hayan sido leídas."):
+                with st.spinner("Re-escaneando medios digitales y Google News (incluyendo historial de noticias)..."):
+                    rss_raw = st.session_state.get("rss_feeds_val", scrapers.DEFAULT_RSS_FEEDS)
+                    rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                    added, msg = scrapers.rescan_digital_media(
+                        rss_feeds=rss_list,
+                        language=lang_code,
+                        country=country_code,
+                        ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
+                        target_client_id=st.session_state.get("active_client_id")
+                    )
+                    if added > 0:
+                        st.success(f"✅ ¡{added} noticias encontradas y agregadas a la bandeja!")
+                        st.session_state.alerts = database.get_alerts_by_status('pending', client_id=st.session_state.active_client_id)
+                        st.rerun()
+                    else:
+                        st.info("ℹ️ No se detectaron noticias adicionales en los feeds digitales para las palabras clave actuales.")
+
         # Render filters
         if st.session_state.alerts:
             st.markdown("##### <i class='fa-solid fa-filter'></i> Filtrar y Buscar Alertas", unsafe_allow_html=True)
@@ -2444,11 +2467,33 @@ with col_left:
                             database.update_client_enabled(c['id'], 1 if enabled_toggle else 0)
                             st.rerun()
                         
-                        # Botón para cargar este cliente directamente en el formulario de edición
-                        edit_btn_key = f"edit_client_btn_{c['id']}"
-                        if st.button("✏️ Editar Datos", key=edit_btn_key, use_container_width=True):
-                            st.session_state.client_form_action = f"✏️ Editar: {c['name']}"
-                            st.rerun()
+                        col_cb1, col_cb2 = st.columns(2)
+                        with col_cb1:
+                            # Botón para cargar este cliente directamente en el formulario de edición
+                            edit_btn_key = f"edit_client_btn_{c['id']}"
+                            if st.button("✏️ Editar Datos", key=edit_btn_key, use_container_width=True):
+                                st.session_state.client_form_action = f"✏️ Editar: {c['name']}"
+                                st.rerun()
+                        with col_cb2:
+                            rescan_btn_key = f"rescan_client_btn_{c['id']}"
+                            if st.button("🔄 Escanear Noticias", key=rescan_btn_key, use_container_width=True, help="Escanea medios digitales de los últimos 14 días para este cliente sin saltarse noticias previas"):
+                                with st.spinner(f"Escaneando medios digitales para '{c['name']}'..."):
+                                    rss_raw = st.session_state.get("rss_feeds_val", scrapers.DEFAULT_RSS_FEEDS)
+                                    rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                                    added, msg = scrapers.rescan_digital_media(
+                                        rss_feeds=rss_list,
+                                        language=lang_code,
+                                        country=country_code,
+                                        ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
+                                        target_client_id=c['id']
+                                    )
+                                    if added > 0:
+                                        st.success(f"✅ ¡{added} noticias agregadas para {c['name']}!")
+                                        if st.session_state.active_client_id == c['id']:
+                                            st.session_state.alerts = database.get_alerts_by_status('pending', client_id=c['id'])
+                                        st.rerun()
+                                    else:
+                                        st.info(f"ℹ️ No se detectaron noticias adicionales en los feeds para {c['name']}.")
         
         with col_form:
             st.markdown("##### <i class='fa-solid fa-user-plus'></i> Agregar / Editar Cliente", unsafe_allow_html=True)
@@ -2600,6 +2645,8 @@ with col_left:
                 
             form_desc = st.text_area("Descripción/Contexto para la IA", value=default_desc, placeholder="Contexto de negocio o marca, temas críticos a monitorear y tono sugerido para el análisis...")
             
+            auto_rescan_media = st.checkbox("🔍 Escanear medios digitales (últimos 14 días) inmediatamente tras guardar", value=True, key="auto_rescan_media_checkbox")
+
             # Buttons
             col_b1, col_b2 = st.columns(2)
             with col_b1:
@@ -2624,6 +2671,24 @@ with col_left:
                             else:
                                 form_keywords_str = ",".join(st.session_state.temp_client_keywords)
                                 database.save_client(client_id, form_name.strip(), form_email.strip(), form_keywords_str, form_desc.strip())
+                                
+                                # Auto-rescan digital media if requested so new client doesn't miss prior news
+                                if auto_rescan_media:
+                                    # Fetch updated client id
+                                    all_cl = database.get_all_clients()
+                                    matched_cl = next((cl for cl in all_cl if cl["name"] == form_name.strip()), None)
+                                    target_id = matched_cl["id"] if matched_cl else None
+                                    if target_id:
+                                        rss_raw = st.session_state.get("rss_feeds_val", scrapers.DEFAULT_RSS_FEEDS)
+                                        rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                                        scrapers.rescan_digital_media(
+                                            rss_feeds=rss_list,
+                                            language=lang_code,
+                                            country=country_code,
+                                            ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
+                                            target_client_id=target_id
+                                        )
+                                
                                 st.success("✅ Cliente guardado con éxito.")
                                 st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
                                 st.rerun()

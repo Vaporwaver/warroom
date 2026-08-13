@@ -184,14 +184,29 @@ def set_state(key, value):
     conn.close()
 
 @with_db_lock
+def clear_rss_processed_cache():
+    """Limpia el cache de noticias de RSS y Google News procesadas para permitir re-escanearlas."""
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM processed_content WHERE identifier LIKE 'rss_%' OR identifier LIKE 'gnews_%' OR source LIKE '%rss%' OR source LIKE '%google_news%' OR source LIKE '%Google News%'")
+        deleted_count = cursor.rowcount
+        conn.commit()
+        return deleted_count
+    finally:
+        conn.close()
+
+@with_db_lock
 def clear_cache_and_cooldowns():
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM processed_content")
-    cursor.execute("DELETE FROM system_state")
-    cursor.execute("DELETE FROM alerts")
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM processed_content")
+        cursor.execute("DELETE FROM system_state")
+        cursor.execute("DELETE FROM alerts")
+        conn.commit()
+    finally:
+        conn.close()
 
 @with_db_lock
 def save_alert(alert, client_id, status='pending'):
