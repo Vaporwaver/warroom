@@ -1495,6 +1495,9 @@ if client_names:
     if selected_client["id"] != st.session_state.active_client_id:
         st.session_state.active_client_id = selected_client["id"]
         st.session_state.page_num = 1  # Reset page number to 1 when client changes
+        # Reset filter widget keys so new client's options initialize cleanly
+        for fk in ["selected_keywords_val", "selected_media_val", "selected_sources_val", "selected_sentiments_val"]:
+            st.session_state.pop(fk, None)
         st.session_state.should_reload = True
         st.session_state.should_reload_approved = True
         st.rerun()
@@ -1628,7 +1631,7 @@ with col_left:
                                 matching_sources.append(src)
                             elif "Facebook" in m_type and "facebook" in src_lower:
                                 matching_sources.append(src)
-                            elif ("RSS" in m_type or "Medios Digitales" in m_type) and "rss" in src_lower:
+                            elif ("RSS" in m_type or "Medios Digitales" in m_type) and any(k in src_lower for k in ("rss", "medios digitales", "google news")):
                                 matching_sources.append(src)
                 matching_sources = sorted(list(set(matching_sources)))
                 selected_sources = st.multiselect("Fuente/Canal", options=matching_sources, default=matching_sources, key="selected_sources_val")
@@ -1665,7 +1668,7 @@ with col_left:
                             media_type_match = True
                         elif "Facebook" in m_type and "facebook" in source_lower:
                             media_type_match = True
-                        elif ("RSS" in m_type or "Medios Digitales" in m_type) and "rss" in source_lower:
+                        elif ("RSS" in m_type or "Medios Digitales" in m_type) and any(k in source_lower for k in ("rss", "medios digitales", "google news")):
                             media_type_match = True
                         
                 if keyword_match and source_match and sentiment_match and media_type_match:
