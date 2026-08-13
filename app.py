@@ -582,10 +582,10 @@ c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
 c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook</div>", unsafe_allow_html=True)
 c_toggle.toggle("Facebook", value=st.session_state.get("media_facebook_active", True), key="media_facebook_active", on_change=save_bool_config, args=("media_facebook_active", "config_media_facebook_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
-# RSS
+# Medios Digitales
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
-c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS</div>", unsafe_allow_html=True)
-c_toggle.toggle("RSS", value=st.session_state.get("media_rss_active", True), key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
+c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>Medios Digitales</div>", unsafe_allow_html=True)
+c_toggle.toggle("Medios Digitales", value=st.session_state.get("media_rss_active", True), key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
 
@@ -950,7 +950,7 @@ https://eldinero.com.do/feed/"""
         )
     if st.session_state.get("media_rss_active", True):
         st.sidebar.text_area(
-            "Feeds RSS",
+            "Medios Digitales (Feeds RSS)",
             key="rss_feeds_val",
             on_change=save_config,
             args=("rss_feeds_val", "config_rss_feeds"),
@@ -1370,14 +1370,14 @@ def render_right_column():
     # 3. Render the metrics and logs in col_right
     st.markdown("### <i class='fa-solid fa-chart-simple'></i> Métricas de Medios", unsafe_allow_html=True)
     
-    # Contador de noticias/contenido verificado (Instagram, RSS, YouTube, Twitter, Facebook)
+    # Contador de noticias/contenido verificado (Instagram, Medios Digitales, YouTube, Twitter, Facebook)
     processed_counts = database.get_processed_counts()
     st.markdown("##### <i class='fa-solid fa-circle-check'></i> Contenido Verificado (Escaneado)", unsafe_allow_html=True)
     col_v1, col_v2, col_v3, col_v4, col_v5 = st.columns(5)
     with col_v1:
         st.metric(label="📸 Instagram", value=processed_counts["instagram"])
     with col_v2:
-        st.metric(label="📰 RSS", value=processed_counts["rss"])
+        st.metric(label="📰 Medios Digitales", value=processed_counts["rss"])
     with col_v3:
         st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
     with col_v4:
@@ -1395,7 +1395,7 @@ def render_right_column():
     ig_cnt = sum(1 for s in sources if "Instagram" in s)
     tw_cnt = sum(1 for s in sources if "Twitter" in s)
     fb_cnt = sum(1 for s in sources if "Facebook" in s)
-    rss_cnt = sum(1 for s in sources if "RSS" in s)
+    rss_cnt = sum(1 for s in sources if "RSS" in s or "Medios Digitales" in s)
     
     total_m = len(st.session_state.alerts)
     pos_cnt = sum(1 for a in st.session_state.alerts if a["sentimiento"] == "Positivo")
@@ -1421,7 +1421,7 @@ def render_right_column():
     st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook ({fb_cnt})</div>", unsafe_allow_html=True)
     st.progress(fb_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS ({rss_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>Medios Digitales ({rss_cnt})</div>", unsafe_allow_html=True)
     st.progress(rss_cnt / total_m if total_m > 0 else 0.0)
     
     st.markdown("---")
@@ -1627,7 +1627,7 @@ with col_left:
                     key="selected_keywords_val"
                 )
             with col_f2:
-                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], key="selected_media_val")
+                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], key="selected_media_val")
             with col_f3:
                 # Find all sources in the alerts cache
                 all_sources = list(set([a["source"] for a in st.session_state.alerts]))
@@ -1830,12 +1830,12 @@ with col_left:
                                 st.link_button("📘 Ver Publicación en Facebook", post_url)
                                 
                         # Render RSS specific details and external link button
-                        elif "rss" in source_lower:
+                        elif "rss" in source_lower or "medios digitales" in source_lower:
                             post_url = metadata.get("post_url")
-                            title = metadata.get("title", "Artículo de RSS")
+                            title = metadata.get("title", "Artículo de Medio Digital")
                             st.markdown(f"📰 **Artículo:** `{title}`")
                             if post_url:
-                                rss_name = alert.get("source", "").replace("RSS (", "").rstrip(")").strip() or "la Fuente"
+                                rss_name = alert.get("source", "").replace("RSS (", "").replace("Medios Digitales (", "").rstrip(")").strip() or "la Fuente"
                                 st.link_button(f"📰 Leer Artículo en {rss_name}", post_url)
                                 
                         # Render st.audio player if audio path exists for this mention
@@ -2000,7 +2000,7 @@ with col_left:
             app_ig = sum(1 for s in app_sources if "Instagram" in s)
             app_tw = sum(1 for s in app_sources if "Twitter" in s)
             app_fb = sum(1 for s in app_sources if "Facebook" in s)
-            app_rss = sum(1 for s in app_sources if "RSS" in s)
+            app_rss = sum(1 for s in app_sources if "RSS" in s or "Medios Digitales" in s)
 
             # 1. Compile Markdown
             report_md = f"# REPORTE DIARIO DE MONITOREO DE MEDIOS\n"
