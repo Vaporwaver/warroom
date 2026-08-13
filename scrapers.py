@@ -2723,11 +2723,27 @@ class MonitoringEngine:
         log_time = time.strftime("%H:%M:%S")
         self.logs_queue.put(f"⏱️ `{log_time}` {message}")
 
+def prevent_system_sleep(enable=True):
+    """Prevents Windows system sleep/standby during monitoring operations."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ES_CONTINUOUS = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            ES_AWAYMODE_REQUIRED = 0x00000040
+            if enable:
+                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
+            else:
+                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+        except Exception:
+            pass
+
     def start(self):
         if self.active:
             return
         self.active = True
         self.stop_event.clear()
+        prevent_system_sleep(True)
         self.worker_thread = threading.Thread(target=self._run_monitoring, daemon=True)
         self.worker_thread.start()
 
@@ -2736,13 +2752,15 @@ class MonitoringEngine:
             return
         self.active = False
         self.stop_event.set()
+        prevent_system_sleep(False)
         if self.worker_thread:
             self.worker_thread.join(timeout=3)
             self.worker_thread = None
 
     def _run_monitoring(self):
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        self.log_event("Motor de Monitoreo iniciado con escaneo paralelo.")
+        prevent_system_sleep(True)
+        self.log_event("Motor de Monitoreo iniciado con escaneo paralelo (Prevención de Suspensión de PC activa).")
         
         while not self.stop_event.is_set():
             # Update keywords dynamically based on all active clients from the database

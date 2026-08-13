@@ -63,7 +63,14 @@ def google_vision_web_detection(image_bytes, credentials_path=None):
                 
         return metadata
     except Exception as e:
-        return {'error': str(e)}
+        err_msg = str(e)
+        if "BILLING_DISABLED" in err_msg or "requires billing" in err_msg:
+            friendly_err = "La API de Google Cloud Vision requiere tener Facturación (Billing) habilitada en el proyecto de Google Cloud Console."
+        elif "Could not automatically determine credentials" in err_msg or "GOOGLE_APPLICATION_CREDENTIALS" in err_msg:
+            friendly_err = "No se encontraron las credenciales JSON de Google Cloud Service Account."
+        else:
+            friendly_err = err_msg
+        return {'error': friendly_err, 'raw_error': err_msg}
 
 
 def get_google_lens_link(image_bytes):

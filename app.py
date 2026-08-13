@@ -584,7 +584,7 @@ c_toggle.toggle("", value=st.session_state.get("media_facebook_active", True), k
 
 # RSS
 c_icon, c_toggle = st.sidebar.columns([0.75, 0.25])
-c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>Medios Digitales</div>", unsafe_allow_html=True)
+c_icon.markdown("<div style='padding-top: 4px; font-size: 0.95rem;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS</div>", unsafe_allow_html=True)
 c_toggle.toggle("", value=st.session_state.get("media_rss_active", True), key="media_rss_active", on_change=save_bool_config, args=("media_rss_active", "config_media_rss_active"), disabled=st.session_state.monitoring_active, label_visibility="collapsed")
 
 st.sidebar.markdown("---")
@@ -950,7 +950,7 @@ https://eldinero.com.do/feed/"""
         )
     if st.session_state.get("media_rss_active", True):
         st.sidebar.text_area(
-            "Medios Digitales (URLs de Feeds RSS)",
+            "Feeds RSS",
             key="rss_feeds_val",
             on_change=save_config,
             args=("rss_feeds_val", "config_rss_feeds"),
@@ -1377,7 +1377,7 @@ def render_right_column():
     with col_v1:
         st.metric(label="📸 Instagram", value=processed_counts["instagram"])
     with col_v2:
-        st.metric(label="📰 Medios Digitales", value=processed_counts["rss"])
+        st.metric(label="📰 RSS", value=processed_counts["rss"])
     with col_v3:
         st.metric(label="🎥 YouTube", value=processed_counts["youtube"])
     with col_v4:
@@ -1421,7 +1421,7 @@ def render_right_column():
     st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-brands fa-facebook' style='color: #1877f2; margin-right: 6px;'></i>Facebook ({fb_cnt})</div>", unsafe_allow_html=True)
     st.progress(fb_cnt / total_m if total_m > 0 else 0.0)
     
-    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>Medios Digitales ({rss_cnt})</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 0.9rem; margin-bottom: 2px;'><i class='fa-solid fa-rss' style='color: #f1c40f; margin-right: 6px;'></i>RSS ({rss_cnt})</div>", unsafe_allow_html=True)
     st.progress(rss_cnt / total_m if total_m > 0 else 0.0)
     
     st.markdown("---")
@@ -1519,7 +1519,7 @@ def render_right_column():
 
 # --- CENTRAL PANEL: Dashboard Visuals ---
 st.markdown("<h1 class='main-title'>Pulse Metrics - Monitoreo de Medios con IA</h1>", unsafe_allow_html=True)
-st.markdown("<p style='color:#a0a0a0; font-size:1.1rem; margin-bottom:25px;'>Monitoreo local en vivo de Radio, YouTube e Instagram con procesamiento lingüístico inteligente local.</p>", unsafe_allow_html=True)
+st.markdown("<p style='color:#a0a0a0; font-size:1.1rem; margin-bottom:25px;'>Monitoreo estratégico de medios tradicionales, digitales y redes sociales en tiempo real</p>", unsafe_allow_html=True)
 
 # Selectbox for Active Client
 clients = database.get_all_clients()
@@ -1627,7 +1627,7 @@ with col_left:
                     key="selected_keywords_val"
                 )
             with col_f2:
-                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], key="selected_media_val")
+                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 RSS"], key="selected_media_val")
             with col_f3:
                 # Find all sources in the alerts cache
                 all_sources = list(set([a["source"] for a in st.session_state.alerts]))
@@ -2020,7 +2020,7 @@ with col_left:
             report_md += f"- **📸 Instagram:** {app_ig} menciones\n"
             report_md += f"- **🐦 Twitter:** {app_tw} menciones\n"
             report_md += f"- **📘 Facebook:** {app_fb} menciones\n"
-            report_md += f"- **📰 Medios Digitales:** {app_rss} menciones\n\n"
+            report_md += f"- **📰 RSS:** {app_rss} menciones\n\n"
             report_md += "---\n\n"
             
             if st.session_state.get("ai_summary_report"):
@@ -2198,7 +2198,32 @@ with col_left:
             image_bytes = uploaded_face.getvalue()
             
             if "web" in search_type.lower():
-                st.markdown("### <i class='fa-solid fa-key'></i> API Oficial: Google Cloud Vision", unsafe_allow_html=True)
+                st.markdown("### 🌐 Búsqueda Visual Directa en la Web", unsafe_allow_html=True)
+                st.markdown("Busca noticias, menciones y páginas web donde aparezca esta imagen utilizando herramientas de búsqueda visual de motor de búsqueda:")
+                
+                col_lens, col_yandex = st.columns(2)
+                with col_lens:
+                    if st.button("🔍 Generar Enlace de Búsqueda con Google Lens", use_container_width=True):
+                        with st.spinner("Subiendo foto de referencia y generando enlace de Google Lens..."):
+                            lens_link = face_search.get_google_lens_link(image_bytes)
+                        if lens_link:
+                            st.success("✅ ¡Enlace de Google Lens listo!")
+                            st.link_button("🌐 Abrir Búsqueda en Google Lens", lens_link, use_container_width=True)
+                        else:
+                            st.warning("⚠️ No se pudo subir temporalmente la imagen a Google Lens. Reintenta en unos momentos.")
+                            
+                with col_yandex:
+                    if st.button("🌐 Generar Enlace de Búsqueda con Yandex Visual", use_container_width=True):
+                        with st.spinner("Subiendo foto de referencia y generando enlace de Yandex..."):
+                            yandex_link = face_search.get_yandex_link(image_bytes)
+                        if yandex_link:
+                            st.success("✅ ¡Enlace de Yandex Visual listo!")
+                            st.link_button("🔎 Abrir Búsqueda en Yandex Visual", yandex_link, use_container_width=True)
+                        else:
+                            st.warning("⚠️ No se pudo subir temporalmente la imagen a Yandex. Reintenta en unos momentos.")
+
+                st.markdown("---")
+                st.markdown("### <i class='fa-solid fa-key'></i> API Oficial: Google Cloud Vision (Auto-importación)", unsafe_allow_html=True)
                 st.markdown("Busca noticias y páginas web que contengan imágenes coincidentes del rostro subido e importa los resultados directamente dentro de la aplicación. Ingresa la ruta local de tu archivo de credenciales JSON de Google Cloud Service Account:")
                 
                 st.text_input(
@@ -2220,8 +2245,14 @@ with col_left:
                     if not results:
                         st.info("ℹ️ No se detectaron coincidencias visuales ni entidades en portales de noticias o web con Google Cloud Vision API.")
                     elif isinstance(results, dict) and 'error' in results:
-                        st.error(f"❌ Error al consultar la API: `{results['error']}`")
-                        st.info("💡 Asegúrate de habilitar la 'Cloud Vision API' en tu consola de Google Cloud y que las credenciales del Service Account sean válidas.")
+                        st.error(f"❌ Error al consultar la API de Google Cloud Vision: `{results['error']}`")
+                        st.info("💡 **Solución:** Activa la facturación (billing) en la consola de Google Cloud para esa API, o utiliza la **Búsqueda Visual Directa (Google Lens / Yandex)** arriba sin costo ni credenciales.")
+                        
+                        # Provide instant fallbacks
+                        with st.spinner("Generando enlace directo de respaldo con Google Lens..."):
+                            fallback_lens = face_search.get_google_lens_link(image_bytes)
+                            if fallback_lens:
+                                st.link_button("🌐 Buscar Foto Directamente en Google Lens", fallback_lens, use_container_width=True)
                     else:
                         best_guess = results.get('best_guess')
                         entities = results.get('entities', [])
