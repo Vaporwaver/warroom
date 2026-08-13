@@ -263,6 +263,20 @@ def get_lightweight_audio_uri(wav_path):
         except Exception:
             return None
 
+def get_current_lang_and_country():
+    lang_val = st.session_state.get("engine_language_val", "Español")
+    lang_code = "en" if lang_val == "Inglés" else "es"
+    country_val = st.session_state.get("engine_country_val", "República Dominicana (RD)")
+    if "República Dominicana" in country_val:
+        country_code = "DO"
+    elif "Estados Unidos" in country_val:
+        country_code = "US"
+    elif "España" in country_val:
+        country_code = "ES"
+    else:
+        country_code = "MX"
+    return lang_code, country_code
+
 def upload_to_catbox(file_path):
     if not file_path or not os.path.exists(file_path):
         return None
@@ -639,18 +653,7 @@ if not st.session_state.monitoring_active:
             rss_list = [line.strip() for line in rss_lines if line.strip()]
         
         # Resolve language and country codes
-        lang_val = st.session_state.get("engine_language_val", "Español")
-        lang_code = "en" if lang_val == "Inglés" else "es"
-        
-        country_val = st.session_state.get("engine_country_val", "República Dominicana (RD)")
-        if "República Dominicana" in country_val:
-            country_code = "DO"
-        elif "Estados Unidos" in country_val:
-            country_code = "US"
-        elif "España" in country_val:
-            country_code = "ES"
-        else:
-            country_code = "MX"
+        lang_code, country_code = get_current_lang_and_country()
             
         # Instantiate and run engine
         st.session_state.engine = scrapers.MonitoringEngine(
@@ -1563,10 +1566,11 @@ with col_left:
                 with st.spinner("Re-escaneando medios digitales y Google News (incluyendo historial de noticias)..."):
                     rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
                     rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                    cur_lang, cur_country = get_current_lang_and_country()
                     added, msg = scrapers.rescan_digital_media(
                         rss_feeds=rss_list,
-                        language=lang_code,
-                        country=country_code,
+                        language=cur_lang,
+                        country=cur_country,
                         ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
                         target_client_id=st.session_state.get("active_client_id")
                     )
@@ -2479,10 +2483,11 @@ with col_left:
                                 with st.spinner(f"Escaneando medios digitales para '{c['name']}'..."):
                                     rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
                                     rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                                    cur_lang, cur_country = get_current_lang_and_country()
                                     added, msg = scrapers.rescan_digital_media(
                                         rss_feeds=rss_list,
-                                        language=lang_code,
-                                        country=country_code,
+                                        language=cur_lang,
+                                        country=cur_country,
                                         ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
                                         target_client_id=c['id']
                                     )
@@ -2680,10 +2685,11 @@ with col_left:
                                     if target_id:
                                         rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
                                         rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                                        cur_lang, cur_country = get_current_lang_and_country()
                                         scrapers.rescan_digital_media(
                                             rss_feeds=rss_list,
-                                            language=lang_code,
-                                            country=country_code,
+                                            language=cur_lang,
+                                            country=cur_country,
                                             ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
                                             target_client_id=target_id
                                         )
