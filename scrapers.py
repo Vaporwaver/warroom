@@ -2411,72 +2411,26 @@ class TVScraper:
 
 # --- AI Ollama Analyzer ---
 class OllamaAnalyzer:
-    def __init__(self, model_name="gemma4:e2b", api_mode="Local (Ollama/Gemma)", credentials_path=None, api_key=None):
+    def __init__(self, model_name="gemma4:e2b", **kwargs):
         self.model_name = model_name
-        self.api_mode = api_mode
-        self.credentials_path = credentials_path
-        self.api_key = api_key
 
     def generate_text(self, system_prompt, prompt_text):
         """
-        Generates text using the selected API mode (Ollama, Vertex AI, or Generative AI Developer API).
+        Generates text using local Ollama instance.
         """
-        api_mode_lower = self.api_mode.lower()
-        
-        if "vertex" in api_mode_lower or "cloud" in api_mode_lower:
-            # Google Cloud Vertex AI Gemini
-            try:
-                import vertexai
-                from vertexai.generative_models import GenerativeModel
-                import json
-                import os
-                
-                if self.credentials_path and os.path.exists(self.credentials_path):
-                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.credentials_path
-                    with open(self.credentials_path, 'r') as f:
-                        creds = json.load(f)
-                        project_id = creds.get("project_id")
-                else:
-                    project_id = None
-                    
-                vertexai.init(project=project_id, location="us-central1")
-                model = GenerativeModel("gemini-1.5-flash")
-                
-                combined_prompt = f"{system_prompt}\n\n{prompt_text}"
-                response = model.generate_content(combined_prompt)
-                return response.text
-            except Exception as e:
-                raise RuntimeError(f"Vertex AI Gemini failed: {str(e)}")
-                
-        elif "api key" in api_mode_lower or "generative" in api_mode_lower or "developer" in api_mode_lower:
-            # Google Generative AI (Developer API Key)
-            try:
-                import google.generativeai as genai
-                
-                genai.configure(api_key=self.api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                
-                combined_prompt = f"{system_prompt}\n\n{prompt_text}"
-                response = model.generate_content(combined_prompt)
-                return response.text
-            except Exception as e:
-                raise RuntimeError(f"Gemini API Key failed: {str(e)}")
-                
-        else:
-            # Local Ollama
-            try:
-                import ollama
-                client = ollama.Client(host='http://localhost:11434', timeout=30.0)
-                response = client.chat(
-                    model=self.model_name,
-                    messages=[
-                        {'role': 'system', 'content': system_prompt},
-                        {'role': 'user', 'content': prompt_text}
-                    ]
-                )
-                return response['message']['content']
-            except Exception as e:
-                raise RuntimeError(f"Ollama local failed: {str(e)}")
+        try:
+            import ollama
+            client = ollama.Client(host='http://localhost:11434', timeout=30.0)
+            response = client.chat(
+                model=self.model_name,
+                messages=[
+                    {'role': 'system', 'content': system_prompt},
+                    {'role': 'user', 'content': prompt_text}
+                ]
+            )
+            return response['message']['content']
+        except Exception as e:
+            raise RuntimeError(f"Ollama local failed: {str(e)}")
 
     def analyze(self, text):
         try:
@@ -2489,7 +2443,7 @@ class OllamaAnalyzer:
             content = self.generate_text(system_prompt, text)
             parsed_json = self._parse_json(content)
             parsed_json["ai_analyzed"] = True
-            parsed_json["model_used"] = "Gemini" if "local" not in self.api_mode.lower() else self.model_name
+            parsed_json["model_used"] = self.model_name
             return parsed_json
             
         except Exception as e:
@@ -2509,82 +2463,38 @@ class OllamaAnalyzer:
                 if "sentimiento" in data and "resumen" in data:
                     # Clean sentiment case
                     sent = data["sentimiento"].strip().capitalize()
-                    if sent in ["Positivo", "Negativo", "Neutral"]:
-                        data["sentimiento"] = sent
-                    return data
-            except json.JSONDecodeError:
+                    if sent not in ["Positivo", "Negativo", "Neutral"]:
+                        sent = "Neutral"
+                    return {
+                        "sentimiento": sent,
+                        "resumen": data["resumen"].strip()
+                    }
+            except Exception:
                 pass
-                
-        # Clean markdown code blocks
-        clean_text = response_text.replace('```json', '').replace('```', '').strip()
-        match = re.search(r'\{.*\}', clean_text, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except json.JSONDecodeError:
-                pass
-                
-        # Regex extraction fallback if JSON format is broken
-        sentiment_match = re.search(r'"sentimiento"\s*:\s*"([^"]+)"', response_text, re.IGNORECASE)
-        resumen_match = re.search(r'"resumen"\s*:\s*"([^"]+)"', response_text, re.IGNORECASE)
-        
-        if sentiment_match and resumen_match:
-            sent = sentiment_match.group(1).strip().capitalize()
-            if sent not in ["Positivo", "Negativo", "Neutral"]:
-                sent = "Neutral"
-            return {
-                "sentimiento": sent,
-                "resumen": resumen_match.group(1).strip()
-            }
-            
-        # Parse crude text indicators
-        text_lower = response_text.lower()
-        sentiment = "Neutral"
-        if "negativo" in text_lower: sentiment = "Negativo"
-        elif "positivo" in text_lower: sentiment = "Positivo"
-        
-        # Simple extraction of one-line summaries
-        resumen = "Resumen no estructurado del análisis de medios."
-        lines = [l.strip() for l in response_text.split('\n') if len(l.strip()) > 10 and not l.startswith('{') and not l.startswith('}')]
-        if lines:
-            resumen = lines[0]
-            
-        return {
-            "sentimiento": sentiment,
-            "resumen": resumen
-        }
+        return self._analyze_fallback(response_text)
 
     def _analyze_fallback(self, text):
+        # Simple heuristic fallback
+        pos_words = ["éxito", "logro", "avance", "positivo", "mejora", "gana", "crecimiento", "premio", "inaugura", "felicita"]
+        neg_words = ["crisis", "denuncia", "fraude", "corrupción", "muerte", "asesinato", "crítica", "quiebra", "falla", "escándalo", "robo", "huelga"]
+        
         text_lower = text.lower()
+        pos_score = sum(1 for w in pos_words if w in text_lower)
+        neg_score = sum(1 for w in neg_words if w in text_lower)
         
-        # Keyword scoring for sentiment
-        pos_words = ["inversión", "inversion", "apoya", "desarrollo", "beneficia", "éxito", "exito", "positivo", "logro", "mejoría", "mejoria", "avanza", "transparencia"]
-        neg_words = ["protesta", "escándalo", "escandalo", "corrupción", "corrupcion", "robo", "crisis", "inflación", "inflacion", "queja", "crítica", "critica", "daño", "colapso", "falta", "irregularidad"]
-        
-        pos_count = sum(1 for w in pos_words if w in text_lower)
-        neg_count = sum(1 for w in neg_words if w in text_lower)
-        
-        if pos_count > neg_count:
+        if pos_score > neg_score:
             sentiment = "Positivo"
-        elif neg_count > pos_count:
+        elif neg_score > pos_score:
             sentiment = "Negativo"
         else:
             sentiment = "Neutral"
             
-        # Context-dependent summaries
-        resumen = "Mención relevante sobre temas gubernamentales y sociales."
-        if "gobierno" in text_lower or "presidente" in text_lower:
-            if sentiment == "Negativo":
-                resumen = "Reporte sobre denuncias y descontento social hacia la administración gubernamental."
-            elif sentiment == "Positivo":
-                resumen = "Destacan iniciativas positivas y proyectos de desarrollo impulsados por el gobierno."
-        elif "política" in text_lower or "politica" in text_lower:
-            resumen = "Análisis del escenario político dominicano y dinámicas de partidos legislativos."
-            
+        summary = text[:150] + "..." if len(text) > 150 else text
         return {
             "sentimiento": sentiment,
-            "resumen": resumen
+            "resumen": summary.replace("\n", " ").strip()
         }
+
 
 def get_scraper_display_name(scraper):
     cls_name = scraper.__class__.__name__
@@ -2628,9 +2538,25 @@ def clean_html_text(raw_html):
     return text
 
 
+def prevent_system_sleep(enable=True):
+    """Prevents Windows system sleep/standby during monitoring operations."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ES_CONTINUOUS = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            ES_AWAYMODE_REQUIRED = 0x00000040
+            if enable:
+                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
+            else:
+                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
+        except Exception:
+            pass
+
+
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=0, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO", transcription_mode="Local (Whisper)", ai_mode="Local (Ollama/Gemma)", google_vision_credentials=None, google_gemini_api_key=None):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=0, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO", **kwargs):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -2642,10 +2568,6 @@ class MonitoringEngine:
         self.uptime_status = {}
         self.language = language
         self.country = country
-        self.transcription_mode = transcription_mode
-        self.ai_mode = ai_mode
-        self.google_vision_credentials = google_vision_credentials
-        self.google_gemini_api_key = google_gemini_api_key
         
         self.twitter_active = twitter_active if twitter_active is not None else False
         self.facebook_active = facebook_active if facebook_active is not None else False
@@ -2669,9 +2591,9 @@ class MonitoringEngine:
         # Instantiate Scrapers
         self.scrapers = []
         for r in self.radio_channels:
-            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(RadioScraper(name=r["name"], tunein_url=r["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language))
         for yt in self.youtube_channels:
-            self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(YouTubeScraper(channel_url=yt, keywords=self.keywords, language=self.language))
         for ig in self.instagram_channels:
             self.scrapers.append(InstagramScraper(username=ig, keywords=self.keywords, sessionid=self.instagram_sessionid))
             
@@ -2715,28 +2637,13 @@ class MonitoringEngine:
             for rss in self.rss_feeds:
                 self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
         for tv in self.tv_channels:
-            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language, transcription_mode=self.transcription_mode, credentials_path=self.google_vision_credentials))
+            self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language))
             
-        self.analyzer = OllamaAnalyzer(self.ollama_model, api_mode=self.ai_mode, credentials_path=self.google_vision_credentials, api_key=self.google_gemini_api_key)
+        self.analyzer = OllamaAnalyzer(self.ollama_model)
 
     def log_event(self, message):
         log_time = time.strftime("%H:%M:%S")
         self.logs_queue.put(f"⏱️ `{log_time}` {message}")
-
-def prevent_system_sleep(enable=True):
-    """Prevents Windows system sleep/standby during monitoring operations."""
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            ES_CONTINUOUS = 0x80000000
-            ES_SYSTEM_REQUIRED = 0x00000001
-            ES_AWAYMODE_REQUIRED = 0x00000040
-            if enable:
-                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
-            else:
-                ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS)
-        except Exception:
-            pass
 
     def start(self):
         if self.active:

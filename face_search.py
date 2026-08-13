@@ -85,72 +85,7 @@ def scraped_web_detection(image_bytes):
     except Exception as e:
         return {'error': f'Error en scraping visual: {str(e)}'}
 
-def google_vision_web_detection(image_bytes, credentials_path=None):
-    """
-    Queries Google Cloud Vision API's Web Detection to identify entities, 
-    best guesses, and pages containing matching images.
-    Returns a dictionary with 'best_guess', 'entities', 'pages', or {'error': 'msg'} on error.
-    """
-    try:
-        from google.cloud import vision
-        import os
-        
-        # Determine best credentials file to use
-        creds_file = credentials_path
-        if not creds_file or not os.path.exists(creds_file):
-            if os.path.exists("google_vision_creds.json"):
-                creds_file = "google_vision_creds.json"
-            else:
-                import glob
-                gen_lang_files = glob.glob("gen-lang-client-*.json")
-                if gen_lang_files:
-                    creds_file = gen_lang_files[0]
-                
-        # Instantiate client with selected credentials path if found
-        if creds_file and os.path.exists(creds_file):
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.abspath(creds_file)
-            client = vision.ImageAnnotatorClient()
-        else:
-            client = vision.ImageAnnotatorClient()
-            
-        image = vision.Image(content=image_bytes)
-        response = client.web_detection(image=image)
-        web_detection = response.web_detection
-        
-        metadata = {
-            'best_guess': "",
-            'entities': [],
-            'pages': []
-        }
-        
-        if web_detection.best_guess_labels:
-            metadata['best_guess'] = web_detection.best_guess_labels[0].label
-            
-        if web_detection.web_entities:
-            for entity in web_detection.web_entities:
-                if entity.description:
-                    metadata['entities'].append({
-                        'description': entity.description,
-                        'score': entity.score
-                    })
-                    
-        if web_detection.pages_with_matching_images:
-            for page in web_detection.pages_with_matching_images:
-                metadata['pages'].append({
-                    'url': page.url,
-                    'page_title': page.page_title or "Página de Noticia"
-                })
-                
-        return metadata
-    except Exception as e:
-        err_msg = str(e)
-        if "BILLING_DISABLED" in err_msg or "requires billing" in err_msg:
-            friendly_err = "La API de Google Cloud Vision requiere tener Facturación (Billing) habilitada en el proyecto de Google Cloud Console."
-        elif "Could not automatically determine credentials" in err_msg or "GOOGLE_APPLICATION_CREDENTIALS" in err_msg:
-            friendly_err = "No se encontraron las credenciales JSON de Google Cloud Service Account."
-        else:
-            friendly_err = err_msg
-        return {'error': friendly_err, 'raw_error': err_msg}
+
 
 
 def get_google_lens_link(image_bytes):

@@ -508,23 +508,6 @@ if "facebook_cookies_val" not in st.session_state:
 if "rss_feeds_val" not in st.session_state:
     saved_val = database.get_state("config_rss_feeds", "")
     st.session_state["rss_feeds_val"] = saved_val if saved_val else DEFAULT_RSS_FEEDS
-if "google_vision_credentials_val" not in st.session_state:
-    saved_val = database.get_state("config_google_vision_credentials", "")
-    if not saved_val:
-        if os.path.exists("google_vision_creds.json"):
-            saved_val = "google_vision_creds.json"
-        else:
-            import glob
-            gen_lang_files = glob.glob("gen-lang-client-*.json")
-            if gen_lang_files:
-                saved_val = gen_lang_files[0]
-    st.session_state["google_vision_credentials_val"] = saved_val
-if "engine_transcription_mode_val" not in st.session_state:
-    st.session_state["engine_transcription_mode_val"] = database.get_state("config_engine_transcription_mode", "Local (Whisper)")
-if "engine_ai_mode_val" not in st.session_state:
-    st.session_state["engine_ai_mode_val"] = database.get_state("config_engine_ai_mode", "Local (Ollama/Gemma)")
-if "google_gemini_api_key_val" not in st.session_state:
-    st.session_state["google_gemini_api_key_val"] = database.get_state("config_google_gemini_api_key", "")
 if "engine_language_val" not in st.session_state:
     st.session_state["engine_language_val"] = database.get_state("config_engine_language", "Español")
 if "engine_country_val" not in st.session_state:
@@ -686,11 +669,7 @@ if not st.session_state.monitoring_active:
             twitter_authtoken=st.session_state.get("twitter_authtoken_val", ""),
             facebook_cookies=st.session_state.get("facebook_cookies_val", ""),
             language=lang_code,
-            country=country_code,
-            transcription_mode=st.session_state.get("engine_transcription_mode_val", "Local (Whisper)"),
-            ai_mode=st.session_state.get("engine_ai_mode_val", "Local (Ollama/Gemma)"),
-            google_vision_credentials=st.session_state.get("google_vision_credentials_val", ""),
-            google_gemini_api_key=st.session_state.get("google_gemini_api_key_val", "")
+            country=country_code
         )
         st.session_state.engine.start()
         st.session_state.monitoring_active = True
@@ -747,44 +726,13 @@ st.sidebar.selectbox(
 )
 
 st.sidebar.selectbox(
-    "Motor de Transcripción",
-    options=["Local (Whisper)", "Google Cloud Speech-to-Text"],
-    key="engine_transcription_mode_val",
-    disabled=st.session_state.monitoring_active,
-    on_change=save_config,
-    args=("engine_transcription_mode_val", "config_engine_transcription_mode"),
-    help="Selecciona el servicio para convertir audio a texto."
-)
-
-st.sidebar.selectbox(
     "Modelo Whisper (Audio local)",
     options=["tiny", "base"],
     index=0,
     key="whisper_model_val",
-    disabled=st.session_state.monitoring_active or st.session_state.force_simulation or st.session_state.engine_transcription_mode_val != "Local (Whisper)",
+    disabled=st.session_state.monitoring_active or st.session_state.force_simulation,
     help="Modelos más pesados incrementan el uso de CPU/RAM."
 )
-
-st.sidebar.selectbox(
-    "Motor de Análisis IA",
-    options=["Local (Ollama/Gemma)", "Google Cloud Gemini (Vertex AI)", "Google Gemini (API Key)"],
-    key="engine_ai_mode_val",
-    disabled=st.session_state.monitoring_active,
-    on_change=save_config,
-    args=("engine_ai_mode_val", "config_engine_ai_mode"),
-    help="Selecciona el motor de inteligencia artificial para resúmenes y análisis."
-)
-
-if st.session_state.engine_ai_mode_val == "Google Gemini (API Key)":
-    st.sidebar.text_input(
-        "Google Gemini API Key",
-        type="password",
-        key="google_gemini_api_key_val",
-        disabled=st.session_state.monitoring_active,
-        on_change=save_config,
-        args=("google_gemini_api_key_val", "config_google_gemini_api_key"),
-        help="Ingresa tu clave de API de Gemini Developer (de Google AI Studio)."
-    )
 
 # Fetch active models for selection if Ollama is running
 ollama_options = ["gemma4:e2b", "gemma4:e4b", "gemma:2b", "gemma:7b"]
@@ -798,7 +746,7 @@ st.sidebar.selectbox(
     options=ollama_options,
     index=0,
     key="ollama_model_val",
-    disabled=st.session_state.monitoring_active or st.session_state.engine_ai_mode_val != "Local (Ollama/Gemma)",
+    disabled=st.session_state.monitoring_active,
     help="Modelo local de Ollama cargado a través de localhost:11434"
 )
 
@@ -1950,15 +1898,8 @@ with col_left:
                     try:
                         import scrapers
                         
-                        api_mode = st.session_state.get("engine_ai_mode_val", "Local (Ollama/Gemma)")
-                        creds_path = st.session_state.get("google_vision_credentials_val", "")
-                        gemini_key = st.session_state.get("google_gemini_api_key_val", "")
-                        
                         analyzer = scrapers.OllamaAnalyzer(
-                            model_name=st.session_state.get("ollama_model_val", "gemma4:e2b"),
-                            api_mode=api_mode,
-                            credentials_path=creds_path,
-                            api_key=gemini_key
+                            model_name=st.session_state.get("ollama_model_val", "gemma4:e2b")
                         )
                         
                         summary = analyzer.generate_text(
@@ -2172,7 +2113,7 @@ with col_left:
 
     with tab_face:
         st.markdown("### <i class='fa-solid fa-face-viewfinder'></i> Módulo de Búsqueda Facial", unsafe_allow_html=True)
-        st.markdown("Sube la imagen del rostro de una persona para identificarla en los clips de video locales (TV) o buscar noticias relacionadas en la Web (Google Cloud Vision API).")
+        st.markdown("Sube la imagen del rostro de una persona para identificarla en los clips de video locales (TV) o buscar noticias relacionadas en la Web.")
         
         # Import face search module
         import face_search
@@ -2191,7 +2132,7 @@ with col_left:
             # Options
             search_type = st.radio(
                 "Tipo de Búsqueda:",
-                ["🌐 Buscar en la Web (Google Cloud Vision)", "💻 Buscar en Videos Locales (Videoteca TV)"],
+                ["🌐 Buscar en la Web", "💻 Buscar en Videos Locales (Videoteca TV)"],
                 index=0,
                 horizontal=True
             )
@@ -2200,9 +2141,13 @@ with col_left:
             
             if "web" in search_type.lower():
                 st.markdown("### 🌐 Búsqueda Visual Directa en la Web", unsafe_allow_html=True)
-                st.markdown("Busca noticias, menciones y páginas web donde aparezca esta imagen utilizando herramientas de búsqueda visual de motor de búsqueda:")
+                st.markdown("Busca noticias, menciones y páginas web donde aparezca esta imagen utilizando herramientas de búsqueda visual:")
                 
-                col_lens, col_yandex, col_scrape = st.columns(3)
+                col_scrape, col_lens, col_yandex = st.columns(3)
+                with col_scrape:
+                    if st.button("🕵️ Scraping Visual Directo", use_container_width=True, type="primary", help="Busca coincidencias e importa páginas de noticias realizando scraping en tiempo real."):
+                        with st.spinner("Ejecutando scraping de búsqueda visual en la web..."):
+                            st.session_state.web_search_results = face_search.scraped_web_detection(image_bytes)
                 with col_lens:
                     if st.button("🔍 Enlace Google Lens", use_container_width=True):
                         with st.spinner("Subiendo foto de referencia y generando enlace de Google Lens..."):
@@ -2222,36 +2167,11 @@ with col_left:
                             st.link_button("🔎 Abrir Búsqueda en Yandex Visual", yandex_link, use_container_width=True)
                         else:
                             st.warning("⚠️ No se pudo subir temporalmente la imagen a Yandex. Reintenta en unos momentos.")
-                            
-                with col_scrape:
-                    if st.button("🕵️ Scraping Visual Directo", use_container_width=True, type="primary", help="Busca coincidencias e importa páginas de noticias realizando scraping en tiempo real sin usar la API pagada de Google Cloud."):
-                        with st.spinner("Ejecutando scraping de búsqueda visual en la web (sin API)..."):
-                            st.session_state.web_search_results = face_search.scraped_web_detection(image_bytes)
 
-                st.markdown("---")
-                st.markdown("### <i class='fa-solid fa-key'></i> API Oficial: Google Cloud Vision (Auto-importación)", unsafe_allow_html=True)
-                st.markdown("Busca noticias y páginas web que contengan imágenes coincidentes del rostro subido e importa los resultados directamente dentro de la aplicación. Ingresa la ruta local de tu archivo de credenciales JSON de Google Cloud Service Account:")
-                
-                st.text_input(
-                    "Ruta al archivo JSON de credenciales:",
-                    key="google_vision_credentials_val",
-                    on_change=save_config,
-                    args=("google_vision_credentials_val", "config_google_vision_credentials"),
-                    help="Ejemplo: C:/Users/Usuario/Documents/proyecto-google-cloud-vision-12345.json"
-                )
-                
-                # Button for Google Cloud Vision API Search
-                if st.button("🚀 Buscar con Google Cloud Vision API", use_container_width=True):
-                    with st.spinner("Conectando con Google Cloud Vision API y ejecutando Web Detection..."):
-                        st.session_state.web_search_results = face_search.google_vision_web_detection(
-                            image_bytes=image_bytes,
-                            credentials_path=st.session_state.google_vision_credentials_val
-                        )
-                        
                 results = st.session_state.get("web_search_results")
                 if results:
                     if isinstance(results, dict) and 'error' in results:
-                        st.error(f"❌ Error al consultar la búsqueda visual: `{results['error']}`")
+                        st.error(f"❌ Error en la búsqueda visual: `{results['error']}`")
                         st.info("💡 **Solución:** Puedes utilizar la **Búsqueda Visual Directa (Google Lens / Yandex)** o **Scraping Visual Directo** sin costo ni credenciales.")
                         
                         # Provide instant fallbacks
