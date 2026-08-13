@@ -196,34 +196,39 @@ def clear_cache_and_cooldowns():
 @with_db_lock
 def save_alert(alert, client_id, status='pending'):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
-    cursor = conn.cursor()
-    
-    # Serialize keywords and metadata
-    kws_str = ",".join(alert.get("keywords", []))
-    metadata_str = json.dumps(alert.get("metadata", {}))
-    
-    cursor.execute("""
-    INSERT OR REPLACE INTO alerts (
-        client_id, identifier, source, text, keywords, timestamp, sentiment, summary, 
-        simulated, metadata, audio_path, video_path, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        client_id,
-        alert["identifier"],
-        alert["source"],
-        alert["text"],
-        kws_str,
-        alert["timestamp"],
-        alert["sentimiento"],
-        alert["resumen"],
-        1 if alert.get("simulated", False) else 0,
-        metadata_str,
-        alert.get("audio_path"),
-        alert.get("video_path"),
-        status
-    ))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        
+        # Serialize keywords and metadata
+        kws_str = ",".join(alert.get("keywords", [])) if isinstance(alert.get("keywords"), list) else str(alert.get("keywords", ""))
+        metadata_str = json.dumps(alert.get("metadata", {}))
+        
+        sentiment = alert.get("sentimiento") or alert.get("sentiment", "Neutral")
+        summary = alert.get("resumen") or alert.get("summary", "Sin resumen disponible.")
+        
+        cursor.execute("""
+        INSERT OR REPLACE INTO alerts (
+            client_id, identifier, source, text, keywords, timestamp, sentiment, summary, 
+            simulated, metadata, audio_path, video_path, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            client_id,
+            alert.get("identifier", f"alert_{int(time.time())}"),
+            alert.get("source", "Desconocido"),
+            alert.get("text", ""),
+            kws_str,
+            alert.get("timestamp", time.time()),
+            sentiment,
+            summary,
+            1 if alert.get("simulated", False) else 0,
+            metadata_str,
+            alert.get("audio_path"),
+            alert.get("video_path"),
+            status
+        ))
+        conn.commit()
+    finally:
+        conn.close()
 
 @with_db_lock
 def update_alert_status(client_id, identifier, status):

@@ -400,47 +400,21 @@ def get_whisper_model(model_name="tiny"):
             _whisper_model_instance = whisper.load_model(model_name)
         return _whisper_model_instance
 
-def transcribe_audio(audio_path, whisper_model_name="tiny", language_code="es", api_mode="Local (Whisper)", credentials_path=None):
+def transcribe_audio(audio_path, whisper_model_name="tiny", language_code="es", return_dict=False, **kwargs):
     """
-    Transcribes audio using either local Whisper or Google Cloud Speech-to-Text.
+    Transcribes audio using local Whisper.
     """
-    if "cloud" in api_mode.lower() or "google" in api_mode.lower():
-        try:
-            from google.cloud import speech
-            import os
-            
-            if credentials_path and os.path.exists(credentials_path):
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_path
-                
-            client = speech.SpeechClient()
-            
-            with open(audio_path, 'rb') as audio_file:
-                content = audio_file.read()
-                
-            audio = speech.RecognitionAudio(content=content)
-            
-            gcp_lang_map = {"es": "es-ES", "en": "en-US"}
-            gcp_lang = gcp_lang_map.get(language_code, "es-ES")
-            
-            config = speech.RecognitionConfig(
-                encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=16000,
-                language_code=gcp_lang,
-            )
-            
-            response = client.recognize(config=config, audio=audio)
-            text = ""
-            for result in response.results:
-                text += result.alternatives[0].transcript + " "
-            return text.strip()
-        except Exception:
-            # Fallback to local whisper on error
-            pass
-            
-    model = get_whisper_model(whisper_model_name)
-    with _whisper_transcription_lock:
-        transcription = model.transcribe(audio_path, language=language_code, fp16=(model.device.type == "cuda"))
-    return transcription.get("text", "")
+    try:
+        model = get_whisper_model(whisper_model_name)
+        with _whisper_transcription_lock:
+            transcription = model.transcribe(audio_path, language=language_code, fp16=(model.device.type == "cuda"))
+        if return_dict:
+            return transcription
+        return transcription.get("text", "")
+    except Exception:
+        if return_dict:
+            return {"text": "", "segments": []}
+        return ""
 
 
 def concat_media_files(file_list, output_path, is_video=True):
@@ -983,46 +957,63 @@ class YouTubeScraper:
                         # 3. Transcribe
                         log(f"Transcribiendo audio para {video_id}...")
                         model_name = engine.whisper_model if (engine and hasattr(engine, 'whisper_model')) else "tiny"
-                        full_text = transcribe_audio(
+                        transcription_res = transcribe_audio(
                             audio_path=wav_audio_path,
                             whisper_model_name=model_name,
                             language_code=self.language,
-                            api_mode=self.transcription_mode,
-                            credentials_path=self.credentials_path
+                            return_dict=True
                         )
+                        
+                        full_text = transcription_res.get("text", "") if isinstance(transcription_res, dict) else str(transcription_res)
+                        segments = transcription_res.get("segments", []) if isinstance(transcription_res, dict) else []
                         
                         # 4. Search keywords and build context using Whisper segment timestamps
                         found_kws = contains_keywords(full_text, self.keywords)
                         if found_kws:
                             video_had_mention = True
-                            segments = transcription.get("segments", [])
-                            for idx, segment in enumerate(segments):
-                                seg_text = segment.get("text", "")
-                                seg_kws = contains_keywords(seg_text, self.keywords)
-                                if seg_kws:
-                                    segment_start = segment.get("start", 0)
-                                    mention_id = f"yt_{video_id}_{round(segment_start, 1)}"
-                                    
-                                    # Extract context from segments (+/- 2 segments)
-                                    start_idx = max(0, idx - 2)
-                                    end_idx = min(len(segments), idx + 3)
-                                    context_segments = [segments[i].get("text", "") for i in range(start_idx, end_idx)]
-                                    context_text = " ".join(context_segments)
-                                    
-                                    mentions.append({
-                                        "source": f"YouTube ({self.channel_name})",
-                                        "text": context_text.strip(),
-                                        "keywords": seg_kws,
-                                        "timestamp": time.time(),
-                                        "identifier": mention_id,
-                                        "simulated": False,
-                                        "metadata": {
-                                            "video_url": f"https://youtu.be/{video_id}?t={int(segment_start)}",
-                                            "video_id": video_id,
-                                            "video_title": video_title,
-                                            "seconds": int(segment_start)
-                                        }
-                                    })
+                            if segments:
+                                for idx, segment in enumerate(segments):
+                                    seg_text = segment.get("text", "")
+                                    seg_kws = contains_keywords(seg_text, self.keywords)
+                                    if seg_kws:
+                                        segment_start = segment.get("start", 0)
+                                        mention_id = f"yt_{video_id}_{round(segment_start, 1)}"
+                                        
+                                        # Extract context from segments (+/- 2 segments)
+                                        start_idx = max(0, idx - 2)
+                                        end_idx = min(len(segments), idx + 3)
+                                        context_segments = [segments[i].get("text", "") for i in range(start_idx, end_idx)]
+                                        context_text = " ".join(context_segments)
+                                        
+                                        mentions.append({
+                                            "source": f"YouTube ({self.channel_name})",
+                                            "text": context_text.strip(),
+                                            "keywords": seg_kws,
+                                            "timestamp": time.time(),
+                                            "identifier": mention_id,
+                                            "simulated": False,
+                                            "metadata": {
+                                                "video_url": f"https://youtu.be/{video_id}?t={int(segment_start)}",
+                                                "video_id": video_id,
+                                                "video_title": video_title,
+                                                "seconds": int(segment_start)
+                                            }
+                                        })
+                            else:
+                                mentions.append({
+                                    "source": f"YouTube ({self.channel_name})",
+                                    "text": full_text[:300].strip(),
+                                    "keywords": found_kws,
+                                    "timestamp": time.time(),
+                                    "identifier": f"yt_{video_id}_0",
+                                    "simulated": False,
+                                    "metadata": {
+                                        "video_url": f"https://youtu.be/{video_id}",
+                                        "video_id": video_id,
+                                        "video_title": video_title,
+                                        "seconds": 0
+                                    }
+                                })
                                     
                         # Mark video as fully processed in database
                         database.mark_processed(video_id, f"youtube_{self.channel_name}", has_mention=video_had_mention)
