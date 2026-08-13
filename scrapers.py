@@ -825,32 +825,25 @@ class YouTubeScraper:
             if not video_ids:
                 raise ValueError(f"No se pudieron extraer los IDs de los videos de YouTube ({self.channel_name})")
                 
-            # Check if the most recent video is already in database
-            most_recent_id = video_ids[0]
-            if database.is_processed(most_recent_id):
-                # Set 1-hour cooldown!
-                cooldown_until = time.time() + 3600  # 1 hour from now
+            # Find all videos that have not yet been processed in the database
+            unprocessed_ids = [vid for vid in video_ids if not database.is_processed(vid)]
+            if not unprocessed_ids:
+                # All videos found in this channel are already processed! Set 30-minute cooldown
+                cooldown_until = time.time() + 1800  # 30 minutes
                 database.set_state(cooldown_key, cooldown_until)
-                log(f"El video más reciente de YouTube ({self.channel_name}) ya fue procesado. Activando enfriamiento de 1 hora.")
+                log(f"Todos los videos recientes de YouTube ({self.channel_name}) ya fueron procesados. Activando enfriamiento de 30 minutos.")
                 return []
                 
-            # If the most recent is not processed, we scan the ones that are not processed
+            log(f"YouTube ({self.channel_name}): {len(unprocessed_ids)} videos pendientes de verificar (últimas 2 semanas)...")
+            
             mentions = []
             api = YouTubeTranscriptApi()
             new_videos_scanned = 0
-            age_checked_count = 0
             
-            for video_id in video_ids:
-                if database.is_processed(video_id):
-                    continue
-                    
-                # Check video age (must be at most 2 weeks old)
-                # Limit the number of age checks to 5 per cycle to prevent rate limit/blocking
-                if age_checked_count >= 5:
-                    log(f"Límite de verificación de antigüedad (máx 5) alcanzado para YouTube ({self.channel_name}). El resto se verificará en el siguiente ciclo.")
+            for video_id in unprocessed_ids:
+                if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
                     break
                     
-                age_checked_count += 1
                 video_url = f"https://www.youtube.com/watch?v={video_id}"
                 is_too_old = False
                 try:
@@ -868,21 +861,19 @@ class YouTubeScraper:
                                 if time.time() - upload_dt.timestamp() > 14 * 24 * 3600:
                                     is_too_old = True
                 except Exception as e:
-                    log(f"Error al verificar la antigüedad del video {video_id}: {e}")
+                    log(f"Verificación de fecha para {video_id}: {e}")
                 
                 if is_too_old:
-                    log(f"El video {video_id} es mayor de 2 semanas. Deteniendo escaneo del canal ya que el resto son más antiguos.")
+                    log(f"El video {video_id} tiene más de 2 semanas de antigüedad. Deteniendo escaneo del canal (videos posteriores son más antiguos).")
                     database.mark_processed(video_id, f"youtube_{self.channel_name}", has_mention=False)
-                    break
-                    
-                # Prevent CPU block/saturation in sequential loop (limit to 2 new videos per cycle)
-                if new_videos_scanned >= 2:
-                    log(f"Límite de videos nuevos por ciclo (máx 2) alcanzado para YouTube ({self.channel_name}). El resto se procesará en los próximos ciclos.")
+                    # Since YouTube lists are chronological, all remaining videos are also > 2 weeks
+                    for older_id in unprocessed_ids[unprocessed_ids.index(video_id):]:
+                        database.mark_processed(older_id, f"youtube_{self.channel_name}", has_mention=False)
                     break
                     
                 new_videos_scanned += 1
                 video_title = video_map.get(video_id, "Video de YouTube")
-                log(f"Analizando transcripción de ({self.channel_name}): '{video_title[:40]}...'")
+                log(f"Analizando video {new_videos_scanned} ({self.channel_name}): '{video_title[:40]}...'")
                 
                 video_had_mention = False
                 try:

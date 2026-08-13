@@ -197,6 +197,19 @@ def clear_rss_processed_cache():
         conn.close()
 
 @with_db_lock
+def clear_youtube_cooldowns():
+    """Limpia los enfriamientos de canales de YouTube para forzar escaneo inmediato."""
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM system_state WHERE key LIKE 'youtube_cooldown_until_%'")
+        deleted_count = cursor.rowcount
+        conn.commit()
+        return deleted_count
+    finally:
+        conn.close()
+
+@with_db_lock
 def clear_cache_and_cooldowns():
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
     try:
