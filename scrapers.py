@@ -2062,11 +2062,51 @@ class GoogleNewsScraper:
         }]
 
 
+def extract_article_body(url, timeout=5.0):
+    """
+    Descarga la página web del artículo y extrae el cuerpo principal de texto
+    eliminando menús, scripts, anuncios y footers para análisis profundo de palabras clave.
+    """
+    if not url or not url.startswith("http"):
+        return ""
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'es-419,es;q=0.9,en;q=0.8'
+        }
+        resp = requests.get(url, headers=headers, timeout=timeout)
+        if resp.status_code != 200:
+            return ""
+            
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        for el in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'noscript', 'svg', 'form', 'iframe']):
+            el.decompose()
+            
+        # Target main article container if present
+        article_elem = soup.find('article') or soup.find(class_=re.compile(r'content|article|cuerpo|nota|entry|post-body|story', re.I)) or soup.body
+        if not article_elem:
+            return ""
+            
+        paragraphs = article_elem.find_all('p')
+        if paragraphs:
+            text_blocks = [p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 20]
+            return " ".join(text_blocks)
+        else:
+            return article_elem.get_text(separator=' ', strip=True)
+    except Exception:
+        return ""
+
+
 # --- RSS Feed Scraper ---
 class RSSScraper:
-    def __init__(self, feed_url, keywords):
+    def __init__(self, feed_url, keywords, deep_scan=True):
         self.feed_url = feed_url
         self.keywords = keywords
+        self.deep_scan = deep_scan
         
         domain = extract_rss_domain(feed_url)
         if "news.google.com" in feed_url:
@@ -2157,6 +2197,28 @@ class RSSScraper:
                 scanned_count += 1
                 full_text = f"{title}. {desc}"
                 found_kws = contains_keywords(full_text, self.keywords)
+                
+                # Si no se encontró en el titular y el escaneo profundo está activo, leer el cuerpo del artículo
+                if not found_kws and self.deep_scan and link:
+                    try:
+                        article_body = extract_article_body(link, timeout=4.0)
+                        if article_body:
+                            body_kws = contains_keywords(article_body, self.keywords)
+                            if body_kws:
+                                found_kws = body_kws
+                                # Extraer fragmento relevante con contexto (+/- 150 caracteres)
+                                kw_target = body_kws[0].split()[0]
+                                match_idx = article_body.lower().find(kw_target.lower())
+                                if match_idx != -1:
+                                    start_snip = max(0, match_idx - 150)
+                                    end_snip = min(len(article_body), match_idx + 250)
+                                    context_snip = article_body[start_snip:end_snip].strip()
+                                    full_text = f"{title}. ...{context_snip}..."
+                                else:
+                                    full_text = f"{title}. {article_body[:400]}..."
+                                log(f"🔍 Mención profunda encontrada en el cuerpo de ({self.feed_name}): '{title[:35]}...'")
+                    except Exception:
+                        pass
                 
                 database.mark_processed(identifier, f"rss_{self.feed_name}", has_mention=len(found_kws) > 0)
                 
@@ -2603,7 +2665,7 @@ def prevent_system_sleep(enable=True):
 
 # --- Async/Threading Orchestrator Engine ---
 class MonitoringEngine:
-    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=0, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, language="es", country="DO", **kwargs):
+    def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=0, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, deep_scan=True, language="es", country="DO", **kwargs):
         self.keywords = keywords
         self.scan_interval = scan_interval
         self.force_simulation = force_simulation
@@ -2615,6 +2677,7 @@ class MonitoringEngine:
         self.uptime_status = {}
         self.language = language
         self.country = country
+        self.deep_scan = deep_scan
         
         self.twitter_active = twitter_active if twitter_active is not None else False
         self.facebook_active = facebook_active if facebook_active is not None else False
@@ -2682,7 +2745,7 @@ class MonitoringEngine:
             self.rss_feeds = transformed_feeds
             self.scrapers.append(GoogleNewsScraper(keywords=self.keywords, language=self.language, country=self.country))
             for rss in self.rss_feeds:
-                self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords))
+                self.scrapers.append(RSSScraper(feed_url=rss, keywords=self.keywords, deep_scan=self.deep_scan))
         for tv in self.tv_channels:
             self.scrapers.append(TVScraper(name=tv["name"], stream_url=tv["url"], keywords=self.keywords, duration=40, whisper_model=self.whisper_model, language=self.language))
             
@@ -2991,7 +3054,7 @@ class MonitoringEngine:
         return recovered, len(offline_names)
 
 
-def rescan_digital_media(rss_feeds=None, language="es", country="DO", ollama_model="gemma4:e2b", target_client_id=None, log_callback=None):
+def rescan_digital_media(rss_feeds=None, language="es", country="DO", ollama_model="gemma4:e2b", target_client_id=None, deep_scan=True, log_callback=None):
     """
     Realiza un escaneo forzado e integral de feeds RSS y Google News,
     limpiando el historial de noticias procesadas para capturar menciones
@@ -3025,7 +3088,7 @@ def rescan_digital_media(rss_feeds=None, language="es", country="DO", ollama_mod
     if not all_kws:
         return 0, "No hay palabras clave configuradas en los clientes seleccionados."
 
-    _log(f"🔎 Analizando {len(all_kws)} palabras clave en feeds RSS y Google News...")
+    _log(f"🔎 Analizando {len(all_kws)} palabras clave en feeds RSS y Google News (Escaneo Profundo: {deep_scan})...")
     analyzer = OllamaAnalyzer(ollama_model)
     scrapers_list = []
     
@@ -3037,7 +3100,7 @@ def rescan_digital_media(rss_feeds=None, language="es", country="DO", ollama_mod
         for feed in rss_feeds:
             feed = feed.strip()
             if feed:
-                scrapers_list.append(RSSScraper(feed_url=feed, keywords=all_kws))
+                scrapers_list.append(RSSScraper(feed_url=feed, keywords=all_kws, deep_scan=deep_scan))
                 
     total_added = 0
     for sc in scrapers_list:

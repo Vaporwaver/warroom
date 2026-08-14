@@ -528,6 +528,9 @@ if "engine_language_val" not in st.session_state:
 if "engine_country_val" not in st.session_state:
     st.session_state["engine_country_val"] = database.get_state("config_engine_country", "República Dominicana (RD)")
 
+if "deep_scan_val" not in st.session_state:
+    st.session_state["deep_scan_val"] = (database.get_state("config_deep_scan", "true") == "true")
+
 # Initialize persistent active media switches
 for m_key in ["media_radio_active", "media_tv_active", "media_youtube_active", "media_instagram_active", "media_twitter_active", "media_facebook_active", "media_rss_active"]:
     if m_key not in st.session_state:
@@ -673,7 +676,8 @@ if not st.session_state.monitoring_active:
             twitter_authtoken=st.session_state.get("twitter_authtoken_val", ""),
             facebook_cookies=st.session_state.get("facebook_cookies_val", ""),
             language=lang_code,
-            country=country_code
+            country=country_code,
+            deep_scan=st.session_state.get("deep_scan_val", True)
         )
         st.session_state.engine.start()
         st.session_state.monitoring_active = True
@@ -908,6 +912,15 @@ https://eldinero.com.do/feed/"""
             on_change=save_config,
             args=("rss_feeds_val", "config_rss_feeds"),
             help="Ingresa una URL de feed RSS o medio digital por línea."
+        )
+        st.sidebar.checkbox(
+            "🔍 Escaneo Profundo (Leer cuerpo completo de la noticia)",
+            value=st.session_state.get("deep_scan_val", True),
+            key="deep_scan_val",
+            on_change=save_bool_config,
+            args=("deep_scan_val", "config_deep_scan"),
+            disabled=st.session_state.monitoring_active,
+            help="Abre cada artículo web para leer el texto completo de los párrafos y no perder menciones que estén dentro de la noticia."
         )
     active_kws = st.session_state.get('keywords_str', '')
     st.sidebar.info(f"🔍 **Buscando:** `{active_kws}`")
