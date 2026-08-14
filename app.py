@@ -2520,13 +2520,20 @@ with col_left:
                 default_keywords = ""
                 default_desc = ""
             else:
-                edit_mode = True
                 client_name_to_edit = selected_option.replace("✏️ Editar: ", "")
-                target_client = next(c for c in clients if c["name"] == client_name_to_edit)
-                default_name = target_client["name"]
-                default_email = target_client["email"]
-                default_keywords = target_client["keywords"]
-                default_desc = target_client["description"]
+                target_client = next((c for c in clients if c["name"] == client_name_to_edit), None)
+                if not target_client:
+                    edit_mode = False
+                    default_name = ""
+                    default_email = ""
+                    default_keywords = ""
+                    default_desc = ""
+                else:
+                    edit_mode = True
+                    default_name = target_client["name"]
+                    default_email = target_client["email"]
+                    default_keywords = target_client["keywords"]
+                    default_desc = target_client["description"]
             
             # Initialize temp keywords in session state if action changed or not present
             current_action = selected_option
@@ -2679,29 +2686,34 @@ with col_left:
                                 
                                 # Auto-rescan digital media if requested so new client doesn't miss prior news
                                 if auto_rescan_media:
-                                    # Fetch updated client id
-                                    all_cl = database.get_all_clients()
-                                    matched_cl = next((cl for cl in all_cl if cl["name"] == form_name.strip()), None)
-                                    target_id = matched_cl["id"] if matched_cl else None
-                                    if target_id:
-                                        rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
-                                        rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
-                                        cur_lang, cur_country = get_current_lang_and_country()
-                                        scrapers.rescan_digital_media(
-                                            rss_feeds=rss_list,
-                                            language=cur_lang,
-                                            country=cur_country,
-                                            ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
-                                            target_client_id=target_id
-                                        )
+                                    try:
+                                        all_cl = database.get_all_clients()
+                                        matched_cl = next((cl for cl in all_cl if cl["name"] == form_name.strip()), None)
+                                        target_id = matched_cl["id"] if matched_cl else client_id
+                                        if target_id:
+                                            rss_raw = st.session_state.get("rss_feeds_val", DEFAULT_RSS_FEEDS)
+                                            rss_list = [r.strip() for r in rss_raw.split("\n") if r.strip()]
+                                            cur_lang, cur_country = get_current_lang_and_country()
+                                            scrapers.rescan_digital_media(
+                                                rss_feeds=rss_list,
+                                                language=cur_lang,
+                                                country=cur_country,
+                                                ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
+                                                target_client_id=target_id
+                                            )
+                                    except Exception:
+                                        pass
                                 
                                 st.success("✅ Cliente guardado con éxito.")
-                                st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
+                                st.session_state.client_form_action = f"✏️ Editar: {form_name.strip()}" if edit_mode else "🆕 Agregar Nuevo Cliente"
+                                st.session_state.pop("temp_client_keywords", None)
+                                st.session_state.pop("last_form_action", None)
+                                st.session_state.should_reload = True
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Error al guardar cliente: {e}")
             with col_b2:
-                if edit_mode:
+                if edit_mode and target_client:
                     # Allow deletion unless it is the last client
                     if len(clients) <= 1:
                         st.button("Eliminar Cliente", type="secondary", use_container_width=True, disabled=True, help="No se puede eliminar el único cliente activo.")
@@ -2716,6 +2728,9 @@ with col_left:
                                     remaining_clients = [c for c in clients if c["id"] != target_client["id"]]
                                     st.session_state.active_client_id = remaining_clients[0]["id"]
                                 st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
+                                st.session_state.pop("temp_client_keywords", None)
+                                st.session_state.pop("last_form_action", None)
+                                st.session_state.should_reload = True
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error al eliminar cliente: {e}")

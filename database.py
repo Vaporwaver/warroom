@@ -398,36 +398,42 @@ def get_all_clients():
 @with_db_lock
 def update_client_enabled(client_id, enabled):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
-    cursor = conn.cursor()
-    cursor.execute("UPDATE clients SET enabled = ? WHERE id = ?", (enabled, client_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE clients SET enabled = ? WHERE id = ?", (enabled, client_id))
+        conn.commit()
+    finally:
+        conn.close()
 
 @with_db_lock
 def save_client(client_id, name, email, keywords, description):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
-    cursor = conn.cursor()
-    if client_id is None:
-        cursor.execute("""
-        INSERT INTO clients (name, email, keywords, description)
-        VALUES (?, ?, ?, ?)
-        """, (name, email, keywords, description))
-    else:
-        cursor.execute("""
-        UPDATE clients SET name = ?, email = ?, keywords = ?, description = ?
-        WHERE id = ?
-        """, (name, email, keywords, description, client_id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        if client_id is None:
+            cursor.execute("""
+            INSERT INTO clients (name, email, keywords, description)
+            VALUES (?, ?, ?, ?)
+            """, (name, email, keywords, description))
+        else:
+            cursor.execute("""
+            UPDATE clients SET name = ?, email = ?, keywords = ?, description = ?
+            WHERE id = ?
+            """, (name, email, keywords, description, client_id))
+        conn.commit()
+    finally:
+        conn.close()
 
 @with_db_lock
 def delete_client(client_id):
     conn = sqlite3.connect(DB_PATH, timeout=20.0)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
-    cursor.execute("DELETE FROM alerts WHERE client_id = ?", (client_id,))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+        cursor.execute("DELETE FROM alerts WHERE client_id = ?", (client_id,))
+        conn.commit()
+    finally:
+        conn.close()
 
 @with_db_lock
 def reset_entire_database():
