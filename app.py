@@ -1747,18 +1747,23 @@ with col_left:
                 else:
                     card_class = "pr-card-neutral"
                     sent_badge = f"<span class='badge-sentiment badge-neu'>Neutral</span>"
-                    sent_color = "#3498db"
-                    
                 # Format timestamp for card header
-                try:
-                    alert_dt = datetime.fromtimestamp(alert["timestamp"])
-                    now_dt = datetime.now()
-                    if alert_dt.date() == now_dt.date():
-                        formatted_time = alert_dt.strftime("%I:%M:%S %p")
-                    else:
-                        formatted_time = alert_dt.strftime("%d/%m/%Y %I:%M %p")
-                except Exception:
-                    formatted_time = ""
+                metadata = alert.get("metadata", {})
+                published_str = metadata.get("published_at") or metadata.get("published_time")
+                
+                if published_str:
+                    formatted_time_html = f'<span title="Fecha y Hora de Publicación Original" style="color: #f1c40f; font-size: 0.85rem; font-family: monospace;">📅 {published_str}</span>'
+                else:
+                    try:
+                        alert_dt = datetime.fromtimestamp(alert["timestamp"])
+                        now_dt = datetime.now()
+                        if alert_dt.date() == now_dt.date():
+                            fmt = alert_dt.strftime("%I:%M:%S %p")
+                        else:
+                            fmt = alert_dt.strftime("%d/%m/%Y %I:%M %p")
+                        formatted_time_html = f'<span title="Momento de Captura / Transmisión" style="color: #7f8c8d; font-size: 0.85rem; font-family: monospace;">⏱️ {fmt}</span>'
+                    except Exception:
+                        formatted_time_html = ""
                 
                 # Keywords html badges
                 kw_badges = "".join([f"<span class='badge-kw'>#{kw}</span>" for kw in alert["keywords"]])
@@ -1775,7 +1780,7 @@ with col_left:
                     f'<strong style="font-size: 1.1rem; color: #f1f2f6;">{alert["source"]}</strong>'
                     f'{sim_badge}'
                     f'</div>'
-                    f'<span style="color: #7f8c8d; font-size: 0.85rem; font-family: monospace;">{formatted_time}</span>'
+                    f'{formatted_time_html}'
                     f'</div>'
                     f'<div class="pr-quote">"{alert["text"]}"</div>'
                     f'<div style="background-color: rgba(255, 255, 255, 0.03); border-left: 3px solid {sent_color}; padding: 12px; border-radius: 4px; margin-bottom: 12px;">'
@@ -1830,22 +1835,17 @@ with col_left:
                             if post_url:
                                 st.link_button("📘 Ver Publicación en Facebook", post_url)
                                 
-                        # Render RSS specific details and external link button
+                        # Render RSS / Digital Media specific details and external link button
                         elif "rss" in source_lower or "medios digitales" in source_lower:
                             post_url = metadata.get("post_url")
                             title = metadata.get("title", "Artículo de Medio Digital")
                             pub_time_str = metadata.get("published_at") or metadata.get("published_time")
-                            if not pub_time_str and alert.get("timestamp"):
-                                try:
-                                    pub_dt_local = datetime.fromtimestamp(alert["timestamp"])
-                                    pub_time_str = pub_dt_local.strftime("%d/%m/%Y %I:%M %p")
-                                except Exception:
-                                    pub_time_str = None
                             
+                            st.markdown(f"📰 **Artículo:** `{title}`")
                             if pub_time_str:
-                                st.markdown(f"📰 **Artículo:** `{title}` | 🕒 **Hora de Publicación:** `{pub_time_str}`")
+                                st.markdown(f"📅 **Fecha de Publicación Original:** `{pub_time_str}`")
                             else:
-                                st.markdown(f"📰 **Artículo:** `{title}`")
+                                st.markdown(f"📅 **Fecha de Publicación:** *(No provista por el feed)*")
                                 
                             if post_url:
                                 rss_name = alert.get("source", "").replace("RSS (", "").replace("Medios Digitales (", "").rstrip(")").strip() or "la Fuente"

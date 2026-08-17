@@ -197,6 +197,30 @@ def clear_rss_processed_cache():
         conn.close()
 
 @with_db_lock
+def clear_rss_pending_alerts(client_id=None):
+    """Elimina las alertas pendientes de RSS y Google News para permitir re-escanearlas con sus fechas y horas reales de publicación."""
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    try:
+        cursor = conn.cursor()
+        if client_id:
+            cursor.execute("""
+            DELETE FROM alerts 
+            WHERE status = 'pending' AND client_id = ? 
+              AND (identifier LIKE 'rss_%' OR identifier LIKE 'gnews_%' OR source LIKE '%RSS%' OR source LIKE '%Medios Digitales%' OR source LIKE '%Google News%')
+            """, (client_id,))
+        else:
+            cursor.execute("""
+            DELETE FROM alerts 
+            WHERE status = 'pending' 
+              AND (identifier LIKE 'rss_%' OR identifier LIKE 'gnews_%' OR source LIKE '%RSS%' OR source LIKE '%Medios Digitales%' OR source LIKE '%Google News%')
+            """)
+        deleted_count = cursor.rowcount
+        conn.commit()
+        return deleted_count
+    finally:
+        conn.close()
+
+@with_db_lock
 def clear_youtube_cooldowns():
     """Limpia los enfriamientos de canales de YouTube para forzar escaneo inmediato."""
     conn = sqlite3.connect(DB_PATH, timeout=20.0)

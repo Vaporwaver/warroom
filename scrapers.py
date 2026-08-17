@@ -3207,6 +3207,7 @@ def rescan_digital_media(rss_feeds=None, language="es", country="DO", ollama_mod
             
     _log("🔄 Limpiando historial de noticias procesadas de medios digitales...")
     deleted = database.clear_rss_processed_cache()
+    database.clear_rss_pending_alerts(target_client_id)
     _log(f"✅ Caché reiniciado ({deleted} registros anteriores liberados).")
     
     clients = database.get_all_clients()
