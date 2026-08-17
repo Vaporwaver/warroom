@@ -1747,6 +1747,8 @@ with col_left:
                 else:
                     card_class = "pr-card-neutral"
                     sent_badge = f"<span class='badge-sentiment badge-neu'>Neutral</span>"
+                    sent_color = "#3498db"
+                    
                 # Format timestamp for card header
                 metadata = alert.get("metadata", {})
                 published_str = metadata.get("published_at") or metadata.get("published_time")
