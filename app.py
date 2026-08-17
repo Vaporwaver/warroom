@@ -1749,7 +1749,16 @@ with col_left:
                     sent_badge = f"<span class='badge-sentiment badge-neu'>Neutral</span>"
                     sent_color = "#3498db"
                     
-                formatted_time = datetime.fromtimestamp(alert["timestamp"]).strftime("%I:%M:%S %p")
+                # Format timestamp for card header
+                try:
+                    alert_dt = datetime.fromtimestamp(alert["timestamp"])
+                    now_dt = datetime.now()
+                    if alert_dt.date() == now_dt.date():
+                        formatted_time = alert_dt.strftime("%I:%M:%S %p")
+                    else:
+                        formatted_time = alert_dt.strftime("%d/%m/%Y %I:%M %p")
+                except Exception:
+                    formatted_time = ""
                 
                 # Keywords html badges
                 kw_badges = "".join([f"<span class='badge-kw'>#{kw}</span>" for kw in alert["keywords"]])
@@ -1825,7 +1834,19 @@ with col_left:
                         elif "rss" in source_lower or "medios digitales" in source_lower:
                             post_url = metadata.get("post_url")
                             title = metadata.get("title", "Artículo de Medio Digital")
-                            st.markdown(f"📰 **Artículo:** `{title}`")
+                            pub_time_str = metadata.get("published_at") or metadata.get("published_time")
+                            if not pub_time_str and alert.get("timestamp"):
+                                try:
+                                    pub_dt_local = datetime.fromtimestamp(alert["timestamp"])
+                                    pub_time_str = pub_dt_local.strftime("%d/%m/%Y %I:%M %p")
+                                except Exception:
+                                    pub_time_str = None
+                            
+                            if pub_time_str:
+                                st.markdown(f"📰 **Artículo:** `{title}` | 🕒 **Hora de Publicación:** `{pub_time_str}`")
+                            else:
+                                st.markdown(f"📰 **Artículo:** `{title}`")
+                                
                             if post_url:
                                 rss_name = alert.get("source", "").replace("RSS (", "").replace("Medios Digitales (", "").rstrip(")").strip() or "la Fuente"
                                 st.link_button(f"📰 Leer Artículo en {rss_name}", post_url)
@@ -2019,12 +2040,20 @@ with col_left:
                 elif "youtube" in source_lower_rpt: source_icon = "🎥"
                 elif "twitter" in source_lower_rpt: source_icon = "🐦"
                 elif "facebook" in source_lower_rpt: source_icon = "📘"
-                elif "rss" in source_lower_rpt: source_icon = "📰"
+                elif any(k in source_lower_rpt for k in ("medios digitales", "rss", "google news")): source_icon = "📰"
                 else: source_icon = "📸"
-                formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%I:%M %p")
+                try:
+                    formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%d/%m/%Y %I:%M %p")
+                except Exception:
+                    formatted_time = ""
                 sentiment_str = "🟢 Positivo" if a["sentimiento"] == "Positivo" else ("🔴 Negativo" if a["sentimiento"] == "Negativo" else "🔵 Neutral")
                 
                 report_md += f"### {source_icon} {a['source']} - {formatted_time} ({sentiment_str})\n"
+                
+                pub_info = a.get("metadata", {}).get("published_at") or a.get("metadata", {}).get("published_time")
+                if pub_info and any(k in source_lower_rpt for k in ("medios digitales", "rss", "google news")):
+                    report_md += f"**Hora de Publicación:** {pub_info}\n\n"
+                    
                 report_md += f"**Mención original:** *\"{a['text']}\"*\n\n"
                 report_md += f"**Resumen de IA:** {a['resumen']}\n\n"
                 
@@ -2078,15 +2107,20 @@ with col_left:
             from io import StringIO
             f = StringIO()
             writer = csv.writer(f, delimiter=';', lineterminator='\n')
-            writer.writerow(["Fecha/Hora", "Medio/Fuente", "Texto Original", "Resumen de IA", "Sentimiento", "Enlace de Fuente"])
+            writer.writerow(["Fecha/Hora de Publicación", "Medio/Fuente", "Texto Original", "Resumen de IA", "Sentimiento", "Enlace de Fuente"])
             for a in st.session_state.approved_alerts:
-                formatted_time = datetime.fromtimestamp(a["timestamp"]).strftime("%Y-%m-%d %I:%M:%S %p")
+                pub_info = a.get("metadata", {}).get("published_at")
+                if not pub_info and a.get("timestamp"):
+                    try:
+                        pub_info = datetime.fromtimestamp(a["timestamp"]).strftime("%Y-%m-%d %I:%M:%S %p")
+                    except Exception:
+                        pub_info = ""
                 link = a.get("metadata", {}).get("video_url") or a.get("metadata", {}).get("post_url") or ""
                 if not link and a.get("audio_path"):
                     link = a.get("metadata", {}).get("online_audio_url") or f"static/{os.path.basename(a['audio_path'])}"
                 if not link and a.get("video_path"):
                     link = a.get("metadata", {}).get("online_video_url") or f"static/{os.path.basename(a['video_path'])}"
-                writer.writerow([formatted_time, a["source"], a["text"], a["resumen"], a["sentimiento"], link])
+                writer.writerow([pub_info, a["source"], a["text"], a["resumen"], a["sentimiento"], link])
             
             # Prepend UTF-8 BOM so Excel opens it with correct encoding and handles accents (e.g. empezó, así) properly
             csv_data = "\ufeff" + f.getvalue()

@@ -9,6 +9,7 @@ venv/
 
 # SQLite Database
 db.sqlite
+database.db
 
 # Large Binaries
 OllamaSetup.exe
@@ -29,4 +30,6 @@ gen-lang-client-*.json
 *.mp4
 scratch/
 streamlit_error.log
+yt_page.html
+
 

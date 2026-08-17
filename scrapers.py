@@ -14,12 +14,13 @@ import warnings
 import database
 
 DEFAULT_RSS_FEEDS = """https://news.google.com/rss?hl=es-419&gl=US&ceid=US:es-419
-https://listindiario.com/rss
-https://www.diariolibre.com/rss
-https://elnacional.com.do/feed/
-https://somospueblo.com/feed/
+https://www.diariolibre.com/rss/portada.xml
+https://eldia.com.do/feed/
+https://elnuevodiario.com.do/feed/
 https://remolacha.net/feed/
-https://hoy.com.do/feed/
+https://almomento.net/feed/
+https://noticiassin.com/feed/
+https://deultimominuto.net/feed/
 https://eldinero.com.do/feed/"""
 
 # Silent logger to suppress yt-dlp console error spam
@@ -1892,6 +1893,105 @@ class FacebookScraper:
 
 
 
+def get_item_field(item, field_names):
+    """
+    Obtiene el texto de un campo en un elemento de noticias (compatible tanto con ElementTree Element como BeautifulSoup Tag).
+    """
+    if item is None:
+        return ""
+    if isinstance(field_names, str):
+        field_names = [field_names]
+        
+    # Si es un Tag de BeautifulSoup
+    if hasattr(item, 'find_all') and not hasattr(item, 'findall'):
+        for f in field_names:
+            el = item.find(re.compile(rf'^{re.escape(f)}$', re.I))
+            if el is not None and el.get_text():
+                return el.get_text().strip()
+            # Si el elemento tiene atributo href (ej. <link href="..."/> en Atom)
+            if el is not None and el.get('href'):
+                return el.get('href').strip()
+        return ""
+        
+    # Si es un Element de ElementTree
+    for f in field_names:
+        el = item.find(f)
+        if el is not None:
+            if el.text and el.text.strip():
+                return el.text.strip()
+            if el.attrib and 'href' in el.attrib:
+                return el.attrib['href'].strip()
+                
+    for child in item:
+        tag_clean = child.tag.split('}')[-1].lower() if '}' in child.tag else child.tag.lower()
+        if tag_clean in [fn.lower() for fn in field_names]:
+            if child.text and child.text.strip():
+                return child.text.strip()
+            if child.attrib and 'href' in child.attrib:
+                return child.attrib['href'].strip()
+    return ""
+
+
+def extract_rss_publication_date(item):
+    """
+    Extrae y analiza la fecha y hora de publicación de un elemento RSS/Atom/XML.
+    Retorna una tupla: (pub_dt, pub_timestamp, formatted_time_str, formatted_datetime_str, raw_date_str)
+    """
+    import datetime as dt_module
+    import email.utils
+    
+    if item is None:
+        now_dt = dt_module.datetime.now()
+        return now_dt, now_dt.timestamp(), now_dt.strftime("%I:%M %p"), now_dt.strftime("%d/%m/%Y %I:%M %p"), ""
+        
+    raw_date = get_item_field(item, ['pubDate', 'pubdate', 'published', 'updated', 'date', 'dc:date'])
+    if not raw_date:
+        now_dt = dt_module.datetime.now()
+        return None, time.time(), now_dt.strftime("%I:%M %p"), now_dt.strftime("%d/%m/%Y %I:%M %p"), ""
+        
+    parsed_dt = None
+    
+    # 1. Intentar con email.utils (formato RFC 2822 estándar en RSS)
+    try:
+        parsed_dt = email.utils.parsedate_to_datetime(raw_date)
+    except Exception:
+        pass
+        
+    # 2. Intentar parsear ISO 8601 (estándar en Atom y JSON feeds)
+    if parsed_dt is None:
+        try:
+            clean_iso = raw_date.replace("Z", "+00:00")
+            parsed_dt = dt_module.datetime.fromisoformat(clean_iso)
+        except Exception:
+            pass
+            
+    # 3. Intentar con dateutil parser si está disponible
+    if parsed_dt is None:
+        try:
+            from dateutil import parser as date_parser
+            parsed_dt = date_parser.parse(raw_date)
+        except Exception:
+            pass
+            
+    if parsed_dt is not None:
+        # Convertir fecha/hora a la zona horaria local del sistema
+        try:
+            if parsed_dt.tzinfo is not None:
+                local_dt = parsed_dt.astimezone()
+            else:
+                local_dt = parsed_dt
+        except Exception:
+            local_dt = parsed_dt
+            
+        pub_ts = parsed_dt.timestamp()
+        pub_time = local_dt.strftime("%I:%M %p")
+        pub_datetime = local_dt.strftime("%d/%m/%Y %I:%M %p")
+        return parsed_dt, pub_ts, pub_time, pub_datetime, raw_date
+    else:
+        now_dt = dt_module.datetime.now()
+        return None, time.time(), now_dt.strftime("%I:%M %p"), now_dt.strftime("%d/%m/%Y %I:%M %p"), raw_date
+
+
 # --- Google News Scraper ---
 class GoogleNewsScraper:
     def __init__(self, keywords, language="es", country="DO"):
@@ -1947,29 +2047,28 @@ class GoogleNewsScraper:
             try:
                 req = urllib.request.Request(
                     feed_url, 
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'}
                 )
                 with urllib.request.urlopen(req, timeout=15.0) as response:
                     xml_data = response.read()
                     
                 xml_str = xml_data.decode('utf-8', errors='replace')
-                xml_str = re.sub(r'&(?!([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', xml_str)
+                clean_xml = re.sub(r'&(?!([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', xml_str)
                 
-                root = ET.fromstring(xml_str.encode('utf-8'))
-                items = root.findall('.//item')
+                items = []
+                try:
+                    root = ET.fromstring(clean_xml.encode('utf-8'))
+                    items = root.findall('.//item')
+                except Exception:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(xml_str, 'html.parser')
+                    items = soup.find_all('item')
                 
                 scanned_count = 0
                 for item in items:
-                    title_elem = item.find('title')
-                    link_elem = item.find('link')
-                    desc_elem = item.find('description')
-                    
-                    title = title_elem.text if title_elem is not None else ""
-                    link = link_elem.text if link_elem is not None else ""
-                    desc = desc_elem.text if desc_elem is not None else ""
-                    
-                    title = clean_html_text(title)
-                    desc = clean_html_text(desc)
+                    title = clean_html_text(get_item_field(item, ['title']))
+                    link = get_item_field(item, ['link', 'guid'])
+                    desc = clean_html_text(get_item_field(item, ['description', 'summary']))
                     
                     if not link:
                         continue
@@ -1979,17 +2078,11 @@ class GoogleNewsScraper:
                     if database.is_processed(identifier):
                         continue
                         
-                    pubdate_elem = item.find('pubDate')
-                    pubdate_text = pubdate_elem.text if pubdate_elem is not None else ""
+                    pub_dt, pub_ts, pub_time, pub_datetime, raw_pubdate = extract_rss_publication_date(item)
                     is_too_old = False
-                    pub_dt = None
-                    if pubdate_text:
-                        try:
-                            pub_dt = email.utils.parsedate_to_datetime(pubdate_text)
-                            if time.time() - pub_dt.timestamp() > 14 * 24 * 3600:
-                                is_too_old = True
-                        except Exception:
-                            pass
+                    if pub_dt:
+                        if time.time() - pub_ts > 14 * 24 * 3600:
+                            is_too_old = True
                             
                     if is_too_old:
                         database.mark_processed(identifier, "google_news", has_mention=False)
@@ -2015,12 +2108,15 @@ class GoogleNewsScraper:
                             "source": f"Medios Digitales ({publisher})",
                             "text": f"{title}. {desc}".strip(),
                             "keywords": found_kws,
-                            "timestamp": pub_dt.timestamp() if pub_dt else time.time(),
+                            "timestamp": pub_ts,
                             "identifier": identifier,
                             "simulated": False,
                             "metadata": {
                                 "post_url": link,
-                                "title": title
+                                "title": title,
+                                "published_time": pub_time,
+                                "published_at": pub_datetime,
+                                "published_raw": raw_pubdate
                             }
                         })
                 log(f"Búsqueda de '{keyword}' en Medios Digitales completada. {scanned_count} noticias nuevas analizadas.")
@@ -2048,6 +2144,11 @@ class GoogleNewsScraper:
         found_kws = contains_keywords(text, self.keywords)
         kw_for_source = found_kws[0] if found_kws else (self.keywords[0] if self.keywords else "noticia")
         
+        import datetime as dt_module
+        sim_now = dt_module.datetime.now()
+        sim_time_str = sim_now.strftime("%I:%M %p")
+        sim_datetime_str = sim_now.strftime("%d/%m/%Y %I:%M %p")
+        
         return [{
             "source": f"Medios Digitales (Simulado)",
             "text": text,
@@ -2057,7 +2158,10 @@ class GoogleNewsScraper:
             "simulated": True,
             "diagnostic": diagnostic_msg,
             "metadata": {
-                "post_url": "https://news.google.com"
+                "post_url": "https://news.google.com",
+                "title": text[:60] + "...",
+                "published_time": sim_time_str,
+                "published_at": sim_datetime_str
             }
         }]
 
@@ -2135,39 +2239,72 @@ class RSSScraper:
             import html
             import hashlib
             
+            import requests
+            import xml.etree.ElementTree as ET
+            import html
+            import hashlib
+            import re
+            from bs4 import BeautifulSoup
+            
             log(f"Iniciando escaneo de Medios Digitales ({self.feed_name})...")
             
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'es-419,es;q=0.9,en;q=0.8'
-            }
-            resp = requests.get(self.feed_url, headers=headers, timeout=25.0)
-            xml_data = resp.content
-                
-            # Clean XML string to avoid strict parsing issues
-            xml_str = xml_data.decode('utf-8', errors='replace')
-            # Replace unescaped & with &amp;
-            xml_str = re.sub(r'&(?!([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', xml_str)
+            headers_list = [
+                {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'es-419,es;q=0.9,en;q=0.8',
+                },
+                {
+                    'User-Agent': 'Feedfetcher-Google; (+http://www.google.com/feedfetcher.html)',
+                    'Accept': 'application/rss+xml, application/rdf+xml, application/atom+xml, application/xml, text/xml, */*',
+                }
+            ]
             
-            root = ET.fromstring(xml_str.encode('utf-8'))
-            items = root.findall('.//item')
+            resp = None
+            last_err = None
+            for h in headers_list:
+                try:
+                    r = requests.get(self.feed_url, headers=h, timeout=20.0)
+                    if r.status_code == 200:
+                        resp = r
+                        break
+                    elif resp is None:
+                        resp = r
+                except Exception as req_err:
+                    last_err = req_err
+                    
+            if resp is None:
+                if last_err:
+                    raise last_err
+                raise ValueError("No se pudo conectar con el servidor del feed.")
+                
+            if resp.status_code != 200:
+                raise ValueError(f"El servidor de '{self.feed_name}' devolvió error HTTP {resp.status_code} ({resp.reason})")
+                
+            xml_str = resp.content.decode('utf-8', errors='replace')
+            clean_xml = re.sub(r'&(?!([a-zA-Z0-9]+|#[0-9]+|#x[0-9a-fA-F]+);)', '&amp;', xml_str)
+            
+            items = []
+            try:
+                root = ET.fromstring(clean_xml.encode('utf-8'))
+                items = root.findall('.//item')
+                if not items:
+                    items = root.findall('.//{http://www.w3.org/2005/Atom}entry') or root.findall('.//entry')
+            except Exception:
+                soup = BeautifulSoup(xml_str, 'html.parser')
+                items = soup.find_all('item')
+                if not items:
+                    items = soup.find_all('entry')
+                    
             log(f"Medios Digitales ({self.feed_name}) parseado. {len(items)} noticias encontradas.")
             
             mentions = []
             scanned_count = 0
             
             for item in items:
-                title_elem = item.find('title')
-                link_elem = item.find('link')
-                desc_elem = item.find('description')
-                
-                title = title_elem.text if title_elem is not None else ""
-                link = link_elem.text if link_elem is not None else ""
-                desc = desc_elem.text if desc_elem is not None else ""
-                
-                title = clean_html_text(title)
-                desc = clean_html_text(desc)
+                title = clean_html_text(get_item_field(item, ['title']))
+                link = get_item_field(item, ['link', 'guid', 'id'])
+                desc = clean_html_text(get_item_field(item, ['description', 'summary', 'content', 'content:encoded']))
                 
                 if not link:
                     continue
@@ -2178,17 +2315,11 @@ class RSSScraper:
                     continue
                     
                 # Check RSS item age (must be at most 2 weeks old)
-                pubdate_elem = item.find('pubDate')
-                pubdate_text = pubdate_elem.text if pubdate_elem is not None else ""
+                pub_dt, pub_ts, pub_time, pub_datetime, raw_pubdate = extract_rss_publication_date(item)
                 is_too_old = False
-                if pubdate_text:
-                    try:
-                        import email.utils
-                        pub_dt = email.utils.parsedate_to_datetime(pubdate_text)
-                        if time.time() - pub_dt.timestamp() > 14 * 24 * 3600:
-                            is_too_old = True
-                    except Exception:
-                        pass
+                if pub_dt:
+                    if time.time() - pub_ts > 14 * 24 * 3600:
+                        is_too_old = True
                         
                 if is_too_old:
                     database.mark_processed(identifier, f"rss_{self.feed_name}", has_mention=False)
@@ -2227,12 +2358,15 @@ class RSSScraper:
                         "source": f"Medios Digitales ({self.feed_name})",
                         "text": full_text.strip(),
                         "keywords": found_kws,
-                        "timestamp": time.time(),
+                        "timestamp": pub_ts,
                         "identifier": identifier,
                         "simulated": False,
                         "metadata": {
                             "post_url": link,
-                            "title": title
+                            "title": title,
+                            "published_time": pub_time,
+                            "published_at": pub_datetime,
+                            "published_raw": raw_pubdate
                         }
                     })
                     
@@ -2266,6 +2400,11 @@ class RSSScraper:
         sim_url = f"https://{self.feed_name}/noticia-simulada"
         identifier = f"rss_sim_{int(time.time())}"
         
+        import datetime as dt_module
+        sim_now = dt_module.datetime.now()
+        sim_time_str = sim_now.strftime("%I:%M %p")
+        sim_datetime_str = sim_now.strftime("%d/%m/%Y %I:%M %p")
+        
         return [{
             "source": f"Medios Digitales ({self.feed_name})",
             "text": full_text,
@@ -2276,7 +2415,9 @@ class RSSScraper:
             "diagnostic": diagnostic_msg,
             "metadata": {
                 "post_url": sim_url,
-                "title": title
+                "title": title,
+                "published_time": sim_time_str,
+                "published_at": sim_datetime_str
             }
         }]
 
