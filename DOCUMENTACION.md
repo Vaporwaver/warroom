@@ -90,12 +90,12 @@ El sistema está diseñado de forma modular y minimalista para evitar dependenci
 ## 🎙️ Módulos de Captura y Monitoreo
 
 ### 1. 📻 Monitoreo de Radio en Vivo
-- **Mecanismo**: El motor de radio lee la URL de streaming configurada. Ejecuta un subproceso de `ffmpeg` para capturar un clip de audio de 30 segundos en formato `.wav`.
+- **Mecanismo**: El motor de radio lee la URL de streaming configurada. Ejecuta un subproceso de `ffmpeg` para capturar un segmento de audio en formato `.wav`. Al detectar una coincidencia con palabras clave, captura inmediatamente los 30 segundos posteriores y concatena el segmento anterior, el actual y el posterior para entregar el contexto completo del clip.
 - **Procesamiento**: El audio se convierte a 16kHz mono (requisito de Whisper) y se transcribe de forma local. Si coincide con alguna de las palabras clave, se envía a Ollama para su clasificación.
 - **Reproductor Local**: Las alertas de radio en la bandeja incluyen un botón desplegable nativo para reproducir el clip de audio de forma interactiva en la página web.
 
 ### 2. 📺 Monitoreo de Televisión (TV)
-- **Mecanismo**: El scraper de TV utiliza `yt-dlp` para resolver transmisiones en vivo (como YouTube Live o IPTV `.m3u8`) y graba un fragmento de video de 20 segundos.
+- **Mecanismo**: El scraper de TV utiliza `yt-dlp` para resolver transmisiones en vivo (como YouTube Live o IPTV `.m3u8`) y graba fragmentos de video. Al detectar una coincidencia con palabras clave, captura inmediatamente los 30 segundos posteriores y concatena el video continuo completo.
 - **Optimización**: Para no saturar el almacenamiento, el clip de video se comprime dinámicamente usando el códec H.264 con configuraciones veloces (`-preset ultrafast -crf 28`).
 - **Reproductor Integrado**: La alerta incluye un reproductor interactivo `st.video` para visualizar el clip directamente sin salir del dashboard.
 

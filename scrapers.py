@@ -601,7 +601,7 @@ class RadioScraper:
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "3",
-                "-t", "20",
+                "-t", str(self.duration),
                 "-i", stream_url,
                 "-vn",
                 "-acodec", "pcm_s16le",
@@ -655,15 +655,19 @@ class RadioScraper:
             if found_kws:
                 temp_audio_next = os.path.join(temp_dir, f"radio_temp_next_{uuid.uuid4().hex}.wav")
                 cmd_next = []
-                for item in cmd:
+                for i, item in enumerate(cmd):
                     if item == temp_audio:
                         cmd_next.append(temp_audio_next)
-                    elif item == str(self.duration):
-                        cmd_next.append("60")
+                    elif i > 0 and cmd[i - 1] == "-t":
+                        cmd_next.append("30")
                     else:
                         cmd_next.append(item)
                 
-                subprocess.run(cmd_next, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=80)
+                res_next = subprocess.run(cmd_next, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
+                if res_next.returncode != 0 and stream_url.startswith("https://"):
+                    fallback_url = stream_url.replace("https://", "http://", 1)
+                    cmd_next_fallback = [fallback_url if item == stream_url else item for item in cmd_next]
+                    subprocess.run(cmd_next_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45)
                 
                 project_dir = os.path.dirname(os.path.abspath(__file__))
                 media_dir = os.path.join(project_dir, "static")
@@ -2571,15 +2575,19 @@ class TVScraper:
             if found_kws:
                 temp_video_next = os.path.join(temp_dir, f"tv_temp_next_{uuid.uuid4().hex}.mp4")
                 cmd_video_next = []
-                for item in cmd_video:
+                for i, item in enumerate(cmd_video):
                     if item == temp_video:
                         cmd_video_next.append(temp_video_next)
-                    elif item == str(self.duration):
-                        cmd_video_next.append("60")
+                    elif i > 0 and cmd_video[i - 1] == "-t":
+                        cmd_video_next.append("30")
                     else:
                         cmd_video_next.append(item)
                         
-                subprocess.run(cmd_video_next, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=80)
+                res_next = subprocess.run(cmd_video_next, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=50)
+                if res_next.returncode != 0 and resolved_url.startswith("https://"):
+                    fallback_url = resolved_url.replace("https://", "http://", 1)
+                    cmd_video_next_fallback = [fallback_url if item == resolved_url else item for item in cmd_video_next]
+                    subprocess.run(cmd_video_next_fallback, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=50)
                 
                 project_dir = os.path.dirname(os.path.abspath(__file__))
                 media_dir = os.path.join(project_dir, "static")
