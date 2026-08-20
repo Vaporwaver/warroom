@@ -601,6 +601,8 @@ class RadioScraper:
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "3",
+                "-timeout", "6000000",
+                "-rw_timeout", "8000000",
                 "-t", str(self.duration),
                 "-i", stream_url,
                 "-vn",
@@ -615,24 +617,23 @@ class RadioScraper:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=self.duration + 15
+                timeout=self.duration + 8
             )
             
             if result.returncode != 0:
+                fallback_url = None
                 if stream_url.startswith("https://"):
                     fallback_url = stream_url.replace("https://", "http://", 1)
-                    cmd_fallback = []
-                    for item in cmd:
-                        if item == stream_url:
-                            cmd_fallback.append(fallback_url)
-                        else:
-                            cmd_fallback.append(item)
+                elif stream_url.startswith("http://"):
+                    fallback_url = stream_url.replace("http://", "https://", 1)
                     
+                if fallback_url:
+                    cmd_fallback = [fallback_url if item == stream_url else item for item in cmd]
                     result = subprocess.run(
                         cmd_fallback,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        timeout=self.duration + 15
+                        timeout=self.duration + 8
                     )
             
             if result.returncode != 0:
@@ -1139,81 +1140,97 @@ class InstagramScraper:
         self.sessionid = sessionid
 
     def _scrape_imginn(self, page, log_func):
-        imginn_url = f"https://imginn.com/{self.username}/"
-        log_func(f"Instagram restringido. Navegando a Imginn como bypass público: {imginn_url}")
+        mirrors = [
+            ("Imginn", f"https://imginn.com/{self.username}/"),
+            ("Picuki", f"https://www.picuki.com/profile/{self.username}")
+        ]
         
-        try:
-            page.goto(imginn_url, wait_until="domcontentloaded", timeout=15000)
-            page.wait_for_timeout(3000)
-            
-            # Select all post elements via page.evaluate (fast and robust)
-            posts = page.evaluate("""
-                () => {
-                    const results = [];
-                    const links = document.querySelectorAll('a');
-                    for (const a of links) {
-                        const href = a.getAttribute('href') || '';
-                        if (href.includes('/p/')) {
-                            const img = a.querySelector('img');
-                            const alt = img ? img.getAttribute('alt') || '' : '';
-                            const src = img ? img.getAttribute('src') || '' : '';
-                            results.push({ href, alt, src });
+        for mirror_name, mirror_url in mirrors:
+            log_func(f"Instagram restringido. Navegando a {mirror_name} como bypass público: {mirror_url}")
+            try:
+                page.goto(mirror_url, wait_until="domcontentloaded", timeout=12000)
+                page.wait_for_timeout(2500)
+                
+                # Select all post elements via page.evaluate (fast and robust)
+                posts = page.evaluate("""
+                    () => {
+                        const results = [];
+                        const links = document.querySelectorAll('a');
+                        for (const a of links) {
+                            const href = a.getAttribute('href') || '';
+                            if (href.includes('/p/') || href.includes('/media/')) {
+                                const img = a.querySelector('img');
+                                const alt = img ? img.getAttribute('alt') || '' : '';
+                                const src = img ? img.getAttribute('src') || '' : '';
+                                results.push({ href, alt, src });
+                            }
                         }
+                        return results;
                     }
-                    return results;
-                }
-            """)
-            
-            mentions = []
-            scanned_count = 0
-            
-            for post in posts:
-                if scanned_count >= 16:
-                    break
-                href = post["href"]
-                # Extract shortcode
-                parts = href.split("/p/")
-                shortcode = None
-                if len(parts) > 1:
-                    shortcode = parts[1].split("/")[0].strip()
-                if not shortcode:
+                """)
+                
+                if not posts:
                     continue
+                
+                mentions = []
+                scanned_count = 0
+                
+                for post in posts:
+                    if scanned_count >= 16:
+                        break
+                    href = post["href"]
+                    # Extract shortcode
+                    shortcode = None
+                    if "/p/" in href:
+                        parts = href.split("/p/")
+                        if len(parts) > 1:
+                            shortcode = parts[1].split("/")[0].split("?")[0].strip()
+                    elif "/media/" in href:
+                        parts = href.split("/media/")
+                        if len(parts) > 1:
+                            shortcode = parts[1].split("/")[0].split("?")[0].strip()
+                            
+                    if not shortcode:
+                        continue
+                        
+                    identifier = f"ig_{shortcode}"
                     
-                identifier = f"ig_{shortcode}"
-                
-                # Skip if already processed in database
-                if database.is_processed(identifier):
-                    continue
+                    # Skip if already processed in database
+                    if database.is_processed(identifier):
+                        continue
+                        
+                    caption_text = post["alt"]
+                    if not caption_text:
+                        continue
                     
-                caption_text = post["alt"]
-                if not caption_text:
-                    continue
+                    scanned_count += 1
+                    found_kws = contains_keywords(caption_text, self.keywords)
+                    
+                    # Mark as processed in database
+                    has_mention = len(found_kws) > 0
+                    database.mark_processed(identifier, "instagram", has_mention=has_mention)
+                    
+                    if found_kws:
+                        post_url = f"https://www.instagram.com/p/{shortcode}/"
+                        mentions.append({
+                            "source": f"Instagram (@{self.username})",
+                            "text": caption_text.strip(),
+                            "keywords": found_kws,
+                            "timestamp": time.time(),
+                            "identifier": identifier,
+                            "simulated": False,
+                            "metadata": {
+                                "post_url": post_url
+                            }
+                        })
+                log_func(f"Bypass de {mirror_name} completado. {scanned_count} posts analizados.")
+                return mentions
+            except Exception as mirror_err:
+                log_func(f"Aviso en bypass de {mirror_name}: {mirror_err}")
+                continue
                 
-                scanned_count += 1
-                found_kws = contains_keywords(caption_text, self.keywords)
-                
-                # Mark as processed in database
-                has_mention = len(found_kws) > 0
-                database.mark_processed(identifier, "instagram", has_mention=has_mention)
-                
-                if found_kws:
-                    post_url = f"https://www.instagram.com/p/{shortcode}/"
-                    mentions.append({
-                        "source": f"Instagram (@{self.username})",
-                        "text": caption_text.strip(),
-                        "keywords": found_kws,
-                        "timestamp": time.time(),
-                        "identifier": identifier,
-                        "simulated": False,
-                        "metadata": {
-                            "post_url": post_url
-                        }
-                    })
-            log_func(f"Bypass de Imginn completado. {scanned_count} posts analizados.")
-            return mentions
-        except Exception as imginn_err:
-            log_func(f"Error en bypass de Imginn: {str(imginn_err)}")
-            return []
+        log_func("Instagram: No se pudo conectar a los espejos públicos de bypass. Se sugiere configurar 'sessionid' para acceso directo sin restricciones.")
+        return []
 
     def scrape(self, engine=None):
         def log(msg):
@@ -1519,124 +1536,130 @@ class TwitterScraper:
                         'domain': '.twitter.com',
                         'path': '/'
                     }])
+                else:
+                    log("ℹ️ Twitter: Sin 'auth_token' configurado. X.com exige inicio de sesión para desplegar resultados de búsqueda.")
                 
                 for keyword in self.keywords:
                     if engine and hasattr(engine, "stop_event") and engine.stop_event.is_set():
                         break
                         
                     log(f"Buscando en Twitter: '{keyword}'")
-                    t_q = re.compile(r'\band\b', re.IGNORECASE).sub('AND', keyword)
-                    t_q = re.compile(r'\bor\b', re.IGNORECASE).sub('OR', t_q)
-                    t_q = re.compile(r'\bnot\b', re.IGNORECASE).sub('NOT', t_q)
-                    
-                    url = f"https://x.com/search?q={urllib.parse.quote(t_q)}&f=live"
-                    page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                    page.wait_for_timeout(3000) # Give extra time for React rendering
-                    
-                    # Check for login redirection
-                    if "/login" in page.url.lower():
-                        log(f"Twitter redirigió al muro de inicio de sesión. Asegúrate de configurar un 'auth_token' válido.")
-                        break
-                    
-                    # Scroll down once/twice to trigger page load
                     try:
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
-                        page.wait_for_timeout(2000)
-                    except Exception:
-                        pass
+                        t_q = re.compile(r'\band\b', re.IGNORECASE).sub('AND', keyword)
+                        t_q = re.compile(r'\bor\b', re.IGNORECASE).sub('OR', t_q)
+                        t_q = re.compile(r'\bnot\b', re.IGNORECASE).sub('NOT', t_q)
                         
-                    # Extract tweets
-                    tweets = page.evaluate("""
-                        () => {
-                            const results = [];
-                            const tweetElements = document.querySelectorAll('article[data-testid="tweet"]');
-                            for (const el of tweetElements) {
-                                // Text of the tweet
-                                const textEl = el.querySelector('[data-testid="tweetText"]');
-                                const text = textEl ? textEl.innerText : '';
-                                
-                                // Link/status URL and datetime
-                                const links = el.querySelectorAll('a');
-                                let tweetUrl = '';
-                                for (const a of links) {
-                                    const href = a.getAttribute('href') || '';
-                                    if (href.includes('/status/')) {
-                                        tweetUrl = 'https://x.com' + href;
-                                        break;
+                        url = f"https://x.com/search?q={urllib.parse.quote(t_q)}&f=live"
+                        page.goto(url, wait_until="domcontentloaded", timeout=12000)
+                        page.wait_for_timeout(2000) # Give extra time for React rendering
+                        
+                        # Check for login redirection
+                        if "/login" in page.url.lower():
+                            log(f"X.com redirigió a la página de login para '{keyword}'. Se requiere configurar un 'auth_token' válido en la barra lateral.")
+                            break
+                        
+                        # Scroll down once/twice to trigger page load
+                        try:
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight/2)")
+                            page.wait_for_timeout(1500)
+                        except Exception:
+                            pass
+                            
+                        # Extract tweets
+                        tweets = page.evaluate("""
+                            () => {
+                                const results = [];
+                                const tweetElements = document.querySelectorAll('article[data-testid="tweet"]');
+                                for (const el of tweetElements) {
+                                    // Text of the tweet
+                                    const textEl = el.querySelector('[data-testid="tweetText"]');
+                                    const text = textEl ? textEl.innerText : '';
+                                    
+                                    // Link/status URL and datetime
+                                    const links = el.querySelectorAll('a');
+                                    let tweetUrl = '';
+                                    for (const a of links) {
+                                        const href = a.getAttribute('href') || '';
+                                        if (href.includes('/status/')) {
+                                            tweetUrl = 'https://x.com' + href;
+                                            break;
+                                        }
                                     }
+                                    
+                                    const timeEl = el.querySelector('time');
+                                    const datetime = timeEl ? timeEl.getAttribute('datetime') : '';
+                                    
+                                    results.push({ text, url: tweetUrl, datetime });
                                 }
-                                
-                                const timeEl = el.querySelector('time');
-                                const datetime = timeEl ? timeEl.getAttribute('datetime') : '';
-                                
-                                results.push({ text, url: tweetUrl, datetime });
+                                return results;
                             }
-                            return results;
-                        }
-                    """)
-                    
-                    scanned_count = 0
-                    for tw in tweets:
-                        tweet_text = tw["text"]
-                        tweet_url = tw["url"]
-                        datetime_str = tw["datetime"]
+                        """)
                         
-                        if not tweet_text or not tweet_url:
-                            continue
+                        scanned_count = 0
+                        for tw in tweets:
+                            tweet_text = tw["text"]
+                            tweet_url = tw["url"]
+                            datetime_str = tw["datetime"]
                             
-                        # Extract unique tweet status ID
-                        tweet_id = None
-                        parts = tweet_url.split("/status/")
-                        if len(parts) > 1:
-                            tweet_id = parts[1].split("?")[0].strip()
-                        
-                        if not tweet_id:
-                            tweet_id = hashlib.md5(tweet_url.encode()).hexdigest()
+                            if not tweet_text or not tweet_url:
+                                continue
+                                
+                            # Extract unique tweet status ID
+                            tweet_id = None
+                            parts = tweet_url.split("/status/")
+                            if len(parts) > 1:
+                                tweet_id = parts[1].split("?")[0].strip()
                             
-                        identifier = f"tw_{tweet_id}"
-                        
-                        if database.is_processed(identifier):
-                            continue
+                            if not tweet_id:
+                                tweet_id = hashlib.md5(tweet_url.encode()).hexdigest()
+                                
+                            identifier = f"tw_{tweet_id}"
                             
-                        # Parse timestamp if datetime exists
-                        taken_at = 0
-                        if datetime_str:
-                            try:
-                                import datetime as dt
-                                clean_dt = datetime_str.split(".")[0].replace("Z", "")
-                                parsed_dt = dt.datetime.strptime(clean_dt, "%Y-%m-%dT%H:%M:%S")
-                                taken_at = parsed_dt.replace(tzinfo=dt.timezone.utc).timestamp()
-                            except Exception:
-                                taken_at = 0
-                        
-                        # Skip tweets older than 2 weeks
-                        if taken_at > 0 and (time.time() - taken_at > 14 * 24 * 3600):
-                            database.mark_processed(identifier, "twitter", has_mention=False)
-                            continue
-                        
-                        scanned_count += 1
-                        found_kws = contains_keywords(tweet_text, self.keywords)
-                        has_mention = len(found_kws) > 0
-                        database.mark_processed(identifier, "twitter", has_mention=has_mention)
-                        
-                        if found_kws:
-                            all_mentions.append({
-                                "source": "Twitter",
-                                "text": tweet_text.strip(),
-                                "keywords": found_kws,
-                                "timestamp": taken_at if taken_at > 0 else time.time(),
-                                "identifier": identifier,
-                                "simulated": False,
-                                "metadata": {
-                                    "post_url": tweet_url
-                                }
-                            })
-                    log(f"Búsqueda de '{keyword}' completada en Twitter. {scanned_count} tuits nuevos analizados.")
+                            if database.is_processed(identifier):
+                                continue
+                                
+                            # Parse timestamp if datetime exists
+                            taken_at = 0
+                            if datetime_str:
+                                try:
+                                    import datetime as dt
+                                    clean_dt = datetime_str.split(".")[0].replace("Z", "")
+                                    parsed_dt = dt.datetime.strptime(clean_dt, "%Y-%m-%dT%H:%M:%S")
+                                    taken_at = parsed_dt.replace(tzinfo=dt.timezone.utc).timestamp()
+                                except Exception:
+                                    taken_at = 0
+                            
+                            # Skip tweets older than 2 weeks
+                            if taken_at > 0 and (time.time() - taken_at > 14 * 24 * 3600):
+                                database.mark_processed(identifier, "twitter", has_mention=False)
+                                continue
+                            
+                            scanned_count += 1
+                            found_kws = contains_keywords(tweet_text, self.keywords)
+                            has_mention = len(found_kws) > 0
+                            database.mark_processed(identifier, "twitter", has_mention=has_mention)
+                            
+                            if found_kws:
+                                all_mentions.append({
+                                    "source": "Twitter",
+                                    "text": tweet_text.strip(),
+                                    "keywords": found_kws,
+                                    "timestamp": taken_at if taken_at > 0 else time.time(),
+                                    "identifier": identifier,
+                                    "simulated": False,
+                                    "metadata": {
+                                        "post_url": tweet_url
+                                    }
+                                })
+                        log(f"Búsqueda de '{keyword}' completada en Twitter. {scanned_count} tuits nuevos analizados.")
+                    except Exception as kw_err:
+                        log(f"Aviso en búsqueda de Twitter para '{keyword}': {kw_err}")
+                        continue
                     
                 browser.close()
                 return all_mentions
         except Exception as e:
-            log(f"Error raspando Twitter en vivo: {str(e)}")
+            log(f"Error general raspando Twitter en vivo: {str(e)}")
             return []
 
     def get_simulated_mention(self, diagnostic_msg=None):
@@ -1729,6 +1752,8 @@ class FacebookScraper:
                                 })
                         if cookies_to_add:
                             context.add_cookies(cookies_to_add)
+                else:
+                    log("ℹ️ Facebook: Sin cookies configuradas. Meta restringe las búsquedas de publicaciones sin sesión activa.")
                 
                 # Search Facebook for each keyword
                 for keyword in self.keywords:
@@ -2519,30 +2544,29 @@ class TVScraper:
                 "-flags", "low_delay",
                 "-reconnect", "1",
                 "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "5",
-                "-timeout", "10000000",
-                "-rw_timeout", "15000000",
+                "-reconnect_delay_max", "3",
+                "-timeout", "6000000",
+                "-rw_timeout", "8000000",
                 "-i", resolved_url, "-t", str(self.duration),
                 "-c:v", "copy",
                 "-c:a", "aac", "-ac", "1", "-ar", "16000", temp_video
             ]
             
-            result = subprocess.run(cmd_video, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=self.duration + 20)
+            result = subprocess.run(cmd_video, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=self.duration + 8)
             if result.returncode != 0:
+                fallback_url = None
                 if resolved_url.startswith("https://"):
                     fallback_url = resolved_url.replace("https://", "http://", 1)
-                    cmd_video_fallback = []
-                    for item in cmd_video:
-                        if item == resolved_url:
-                            cmd_video_fallback.append(fallback_url)
-                        else:
-                            cmd_video_fallback.append(item)
+                elif resolved_url.startswith("http://"):
+                    fallback_url = resolved_url.replace("http://", "https://", 1)
                     
+                if fallback_url:
+                    cmd_video_fallback = [fallback_url if item == resolved_url else item for item in cmd_video]
                     result = subprocess.run(
                         cmd_video_fallback,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        timeout=self.duration + 20
+                        timeout=self.duration + 8
                     )
             
             if result.returncode != 0:
@@ -2552,10 +2576,15 @@ class TVScraper:
             cmd_audio = [
                 ffmpeg_bin, "-y", "-i", temp_video, "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000", temp_audio
             ]
-            subprocess.run(cmd_audio, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+            subprocess.run(cmd_audio, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
             
             if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) == 0:
-                raise RuntimeError("Failed to extract audio track from video clip")
+                # Video recording succeeded but stream has no valid audio or audio extraction failed
+                if self.last_segment_video and os.path.exists(self.last_segment_video):
+                    try: os.remove(self.last_segment_video)
+                    except Exception: pass
+                self.last_segment_video = temp_video
+                return []
                 
             # 3. Transcribe
             text = transcribe_audio(
