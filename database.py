@@ -139,7 +139,23 @@ def initialize_db():
         """)
         conn.commit()
         
+    # Purge any simulated records from database
+    cursor.execute("DELETE FROM alerts WHERE simulated = 1 OR identifier LIKE '%_sim_%' OR source LIKE '%(Simulado)%'")
+    cursor.execute("DELETE FROM processed_content WHERE identifier LIKE '%_sim_%'")
+    conn.commit()
     conn.close()
+
+@with_db_lock
+def purge_simulated_records():
+    """Elimina permanentemente de la base de datos cualquier alerta o contenido simulado."""
+    conn = sqlite3.connect(DB_PATH, timeout=20.0)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM alerts WHERE simulated = 1 OR identifier LIKE '%_sim_%' OR source LIKE '%(Simulado)%'")
+    deleted = cursor.rowcount
+    cursor.execute("DELETE FROM processed_content WHERE identifier LIKE '%_sim_%'")
+    conn.commit()
+    conn.close()
+    return deleted
 
 @with_db_lock
 def is_processed(identifier):

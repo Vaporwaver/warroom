@@ -722,31 +722,6 @@ class RadioScraper:
                 except Exception: pass
             raise e
 
-    def get_simulated_mention(self, diagnostic_msg=None):
-        # 30% probability of generating simulated radio mention per cycle to emulate live radio hits
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            "El gobierno actual anunció hoy un nuevo paquete de medidas para incentivar la economía y contener la inflación en los productos de la canasta básica.",
-            "Los partidos de oposición critican la política fiscal del presidente y aseguran que la deuda pública sigue creciendo sin control.",
-            "Expertos debaten en el programa de hoy sobre el impacto de las reformas económicas presentadas por el presidente en el Congreso Nacional.",
-            "El vocero del gobierno defendió las inversiones en educación y salud pública, asegurando que se está haciendo un uso eficiente de los recursos del estado.",
-            f"La política exterior de la República Dominicana ha dado un giro importante en los últimos meses, según opinan analistas en la mesa de discusión de la {self.name}."
-        ]
-        text = random.choice(templates)
-        found_kws = contains_keywords(text, self.keywords)
-        
-        return [{
-            "source": f"Radio ({self.name})",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"radio_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg
-        }]
-
 
 # --- YouTube Scraper ---
 class YouTubeScraper:
@@ -1100,37 +1075,6 @@ class YouTubeScraper:
             log(f"Error raspando YouTube en vivo ({self.channel_name}): {str(e)}")
             raise e
 
-    def get_simulated_mention(self, diagnostic_msg=None):
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            f"En esta investigación de {self.channel_name}, revelamos cómo los fondos de la cooperativa de maestros COOPNAMA fueron desviados para la campaña política del partido oficialista.",
-            f"El último reportaje de {self.channel_name} presenta pruebas contundentes que contradicen el informe oficial del gobierno sobre la caída del paso a desnivel de la 27 de febrero.",
-            "Exclusiva: Conversamos con los maestros afectados por el esquema de préstamos irregulares en la cooperativa, quienes exigen respuestas del presidente y el ministro de educación.",
-            "Analizamos el impacto en la economía nacional tras la aprobación de nuevas exenciones fiscales para sectores allegados al poder político.",
-            f"El reportaje de esta semana de {self.channel_name} expone cómo operaba el vertedero ilegal de San Luis con el consentimiento de autoridades municipales y del gobierno central."
-        ]
-        text = random.choice(templates)
-        found_kws = contains_keywords(text, self.keywords)
-        video_id = "mock_yt_chan"
-        
-        return [{
-            "source": f"YouTube ({self.channel_name})",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"yt_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg,
-            "metadata": {
-                "video_url": f"https://youtu.be/{video_id}",
-                "video_id": video_id,
-                "video_title": text[:60] + "...",
-                "seconds": 45
-            }
-        }]
-
 
 # --- Instagram Scraper ---
 class InstagramScraper:
@@ -1462,33 +1406,6 @@ class InstagramScraper:
             log(f"Error raspando Instagram en vivo: {str(e)}")
             raise e
 
-    def get_simulated_mention(self, diagnostic_msg=None):
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            "🇩🇴 Denuncia ciudadana: Comunitarios protestan en el Cibao exigiendo que el gobierno cumpla con el arreglo de las calles prometido por el presidente. ¿Qué opinan ustedes? 👇 #SomosPueblo #Denuncia",
-            "📉 La economía dominicana según el Banco Central está de maravilla, pero la realidad en la calle es otra. Los precios de los alimentos por las nubes. #SomosPueblo #EconomiaRD #CanastaBasica",
-            "📢 Fuertes declaraciones del presidente sobre el control fronterizo. ¿Crees que son efectivas o pura política electoral de cara al próximo período? Comenta abajo. #SomosPuebloRD #Frontera #Politica",
-            "🚨 Escándalo de corrupción: Diputados aprueban una nueva ley que otorgaría incentivos injustos. La política dominicana sigue golpeando a la clase media. #SomosPueblo #Congreso #Corrupcion",
-            "⚠️ Usuarios denuncian fallas constantes en el servicio de transporte masivo. Exigen al gobierno una auditoría transparente. ¿Hasta cuándo tendremos este servicio? #SomosPuebloRD #MetroSD #Transporte"
-        ]
-        text = random.choice(templates)
-        found_kws = contains_keywords(text, self.keywords)
-        
-        return [{
-            "source": f"Instagram (@{self.username})",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"ig_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg,
-            "metadata": {
-                "post_url": f"https://www.instagram.com/{self.username}/"
-            }
-        }]
-
 
 # --- Twitter (X) Scraper ---
 class TwitterScraper:
@@ -1661,33 +1578,6 @@ class TwitterScraper:
         except Exception as e:
             log(f"Error general raspando Twitter en vivo: {str(e)}")
             return []
-
-    def get_simulated_mention(self, diagnostic_msg=None):
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            "🚨 ÚLTIMA HORA: Se reporta un fuerte incendio en la Zona Industrial de Herrera. Los bomberos ya están en el lugar intentando sofocar las llamas. Se pide precaución. #NoticiasRD #SomosPueblo",
-            "📊 Encuesta: ¿Qué opina la población sobre la nueva propuesta de reforma fiscal del gobierno? La clase media teme el impacto en el costo de la vida. #Opinión #SomosPuebloRD",
-            "📢 Ciudadanos denuncian en redes sociales la falta de patrullaje policial en sectores de Santo Domingo Este tras ola de asaltos. Exigen respuesta de las autoridades.",
-            "⚠️ Atención: El COE coloca varias provincias en alerta verde por la incidencia de una vaguada que generará lluvias moderadas en las próximas horas. #ClimaRD #COE",
-            "💰 Denuncia: Se destapan supuestas irregularidades en la compra de insumos de una entidad pública. Exigen investigación de las autoridades. #SomosPueblo"
-        ]
-        text = random.choice(templates)
-        found_kws = contains_keywords(text, self.keywords)
-        
-        return [{
-            "source": "Twitter",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"tw_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg,
-            "metadata": {
-                "post_url": "https://x.com/search"
-            }
-        }]
 
 
 # --- Facebook Scraper ---
@@ -1885,40 +1775,6 @@ class FacebookScraper:
         except Exception as e:
             log(f"Error raspando Facebook en vivo: {str(e)}")
             return []
-
-    def get_simulated_mention(self, diagnostic_msg=None):
-        import urllib.parse
-        if random.random() > 0.3:
-            return []
-        
-        templates = [
-            "🔴 EN VIVO: Conversando con líderes comunitarios sobre los problemas de agua y electricidad en el municipio. Déjanos tus preguntas en los comentarios y comparte esta transmisión.",
-            "📝 EDITORIAL: La necesidad de una verdadera transparencia legislativa. No basta con discursos, se necesitan hechos y auditorías reales de cada peso invertido en nuestro país.",
-            "📸 Reportan vertedero improvisado afectando la salud de decenas de familias en Los Alcarrizos. Hacemos un llamado a la alcaldía para resolver esta preocupante situación de inmediato.",
-            "🤝 Hoy estuvimos acompañando a los jóvenes del sector en su torneo de baloncesto, apoyando el deporte y alejándolos de los vicios. ¡El cambio comienza desde los barrios!",
-            "🚨 ALERTA: Estafadores están utilizando perfiles falsos para ofrecer empleos en nombre de nuestra organización. Recuerda que no solicitamos dinero para postularte."
-        ]
-        text = random.choice(templates)
-        
-        if self.keywords:
-            kw = random.choice(self.keywords)
-            text = f"{text} #{kw}"
-            
-        found_kws = contains_keywords(text, self.keywords)
-        kw_for_source = found_kws[0] if found_kws else (self.keywords[0] if self.keywords else "búsqueda")
-        
-        return [{
-            "source": f"Facebook (Búsqueda: {kw_for_source})",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"fb_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg,
-            "metadata": {
-                "post_url": f"https://www.facebook.com/search/posts/?q={urllib.parse.quote(kw_for_source)}"
-            }
-        }]
 
 
 
@@ -2154,46 +2010,6 @@ class GoogleNewsScraper:
                 
         return all_mentions
 
-    def get_simulated_mention(self, diagnostic_msg=None):
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            "El presidente Luis Abinader anuncia nuevas medidas económicas para la estabilización de los precios de la canasta básica en República Dominicana.",
-            "Aumento en el flujo de turistas en Punta Cana alcanza niveles récord durante el último trimestre, consolidando la reactivación del sector.",
-            "Especialistas advierten sobre la necesidad de reformas estructurales en el sector eléctrico para evitar pérdidas y mejorar el servicio.",
-            "Inauguran nuevo centro educativo tecnológico en Santiago con capacidad para más de 500 estudiantes de escasos recursos."
-        ]
-        text = random.choice(templates)
-        
-        if self.keywords:
-            kw = random.choice(self.keywords)
-            text = f"{text} Buscan solucionar tema de {kw}."
-            
-        found_kws = contains_keywords(text, self.keywords)
-        kw_for_source = found_kws[0] if found_kws else (self.keywords[0] if self.keywords else "noticia")
-        
-        import datetime as dt_module
-        sim_now = dt_module.datetime.now()
-        sim_time_str = sim_now.strftime("%I:%M %p")
-        sim_datetime_str = sim_now.strftime("%d/%m/%Y %I:%M %p")
-        
-        return [{
-            "source": f"Medios Digitales (Simulado)",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"gnews_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg,
-            "metadata": {
-                "post_url": "https://news.google.com",
-                "title": text[:60] + "...",
-                "published_time": sim_time_str,
-                "published_at": sim_datetime_str
-            }
-        }]
-
 
 def extract_article_body(url, timeout=5.0):
     """
@@ -2405,50 +2221,6 @@ class RSSScraper:
         except Exception as e:
             log(f"Error raspando Medios Digitales en vivo ({self.feed_name}): {str(e)}")
             raise e
-
-    def get_simulated_mention(self, diagnostic_msg=None):
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            ("Denuncian sobrefacturación en el Ministerio de Obras Públicas",
-             f"Una investigación de {self.feed_name} revela contratos millonarios adjudicados de manera directa a empresas vinculadas con funcionarios gubernamentales."),
-            ("Cámara de Cuentas detecta graves irregularidades en auditoría",
-             "El informe detalla el desvío de fondos públicos que debieron ser utilizados en el desarrollo de la red vial nacional, afectando directamente la economía pública."),
-            ("Sectores sociales anuncian protestas en rechazo a la reforma fiscal",
-             "Comunitarios y sindicatos aseguran que el proyecto del presidente golpeará duramente a la clase media y a los pequeños empresarios."),
-            ("Escándalo de corrupción sacude a directiva de cooperativa de maestros",
-             "Miembros exigen transparencia tras descubrirse desvíos de ahorros en COOPNAMA para inversiones de alto riesgo no aprobadas."),
-            ("El presidente inaugura nuevo proyecto de energía renovable en el sur",
-             "El gobierno destaca que esta iniciativa beneficiará la generación eléctrica limpia y reducirá la dependencia de combustibles fósiles.")
-        ]
-        title, desc = random.choice(templates)
-        full_text = f"{title}. {desc}"
-        found_kws = contains_keywords(full_text, self.keywords)
-        
-        sim_url = f"https://{self.feed_name}/noticia-simulada"
-        identifier = f"rss_sim_{int(time.time())}"
-        
-        import datetime as dt_module
-        sim_now = dt_module.datetime.now()
-        sim_time_str = sim_now.strftime("%I:%M %p")
-        sim_datetime_str = sim_now.strftime("%d/%m/%Y %I:%M %p")
-        
-        return [{
-            "source": f"Medios Digitales ({self.feed_name})",
-            "text": full_text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": identifier,
-            "simulated": True,
-            "diagnostic": diagnostic_msg,
-            "metadata": {
-                "post_url": sim_url,
-                "title": title,
-                "published_time": sim_time_str,
-                "published_at": sim_datetime_str
-            }
-        }]
 
 
 # --- TV Scraper ---
@@ -2670,29 +2442,6 @@ class TVScraper:
                     except Exception: pass
             raise e
 
-    def get_simulated_mention(self, diagnostic_msg=None):
-        if random.random() > 0.3:
-            return []
-            
-        templates = [
-            "En el debate televisado de hoy, los ministros defendieron el plan nacional de desarrollo y el presupuesto asignado por el presidente.",
-            "Reportajes especiales de televisión revelan el descontento de la población con el aumento del costo de la canasta básica y la inflación.",
-            "Analistas políticos discuten en vivo sobre la transparencia electoral y las reformas del congreso propuestas por el partido de gobierno.",
-            "La cobertura de prensa televisiva de esta noche destaca el impacto social de la nueva reforma fiscal en el sector empresarial."
-        ]
-        text = random.choice(templates)
-        found_kws = contains_keywords(text, self.keywords)
-        
-        return [{
-            "source": f"TV ({self.name})",
-            "text": text,
-            "keywords": found_kws,
-            "timestamp": time.time(),
-            "identifier": f"tv_sim_{int(time.time())}",
-            "simulated": True,
-            "diagnostic": diagnostic_msg
-        }]
-
 
 # --- AI Ollama Analyzer ---
 class OllamaAnalyzer:
@@ -2846,7 +2595,7 @@ class MonitoringEngine:
     def __init__(self, keywords, radio_channels=None, youtube_channels=None, instagram_channels=None, rss_feeds=None, tv_channels=None, scan_interval=0, force_simulation=False, whisper_model="tiny", ollama_model="gemma4:e2b", instagram_sessionid=None, twitter_authtoken=None, facebook_cookies=None, facebook_active=None, twitter_active=None, deep_scan=True, language="es", country="DO", **kwargs):
         self.keywords = keywords
         self.scan_interval = scan_interval
-        self.force_simulation = force_simulation
+        self.force_simulation = False
         self.whisper_model = whisper_model
         self.ollama_model = ollama_model
         self.instagram_sessionid = instagram_sessionid
@@ -2975,8 +2724,8 @@ class MonitoringEngine:
             except Exception as e:
                 self.log_event(f"Error cargando palabras clave de clientes de la BD: {e}")
 
-            # If no keywords are active (and we are not forcing simulation), skip the scan cycle
-            if not self.keywords and not self.force_simulation:
+            # If no keywords are active, skip the scan cycle
+            if not self.keywords:
                 self.log_event("No hay palabras clave activas. Omitiendo ciclo de escaneo...")
                 for _ in range(int(self.scan_interval)):
                     if self.stop_event.is_set():
@@ -3014,21 +2763,15 @@ class MonitoringEngine:
                     for scraper in fast_scrapers:
                         if self.stop_event.is_set():
                             break
-                        if self.force_simulation:
-                            futures[fast_executor.submit(scraper.get_simulated_mention)] = scraper
-                        else:
-                            cls_name = scraper.__class__.__name__
-                            if cls_name in ("YouTubeScraper", "RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper", "GoogleNewsScraper"):
-                                futures[fast_executor.submit(scraper.scrape, self)] = scraper
+                        cls_name = scraper.__class__.__name__
+                        if cls_name in ("YouTubeScraper", "RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper", "GoogleNewsScraper"):
+                            futures[fast_executor.submit(scraper.scrape, self)] = scraper
 
                     # 2. Submit stream scrapers (Radio/TV) simultaneously on second 0
                     for scraper in stream_scrapers:
                         if self.stop_event.is_set():
                             break
-                        if self.force_simulation:
-                            futures[stream_executor.submit(scraper.get_simulated_mention)] = scraper
-                        else:
-                            futures[stream_executor.submit(scraper.scrape)] = scraper
+                        futures[stream_executor.submit(scraper.scrape)] = scraper
 
                     for future in as_completed(futures):
                         scraper = futures[future]
@@ -3041,7 +2784,7 @@ class MonitoringEngine:
                             url = getattr(scraper, "tunein_url", None) or getattr(scraper, "stream_url", None)
                             media_type = "Radio" if cls_name == "RadioScraper" else ("TV" if cls_name == "TVScraper" else "Other")
                             self.uptime_status[name] = {
-                                "status": "Simulando" if self.force_simulation else "Online",
+                                "status": "Online",
                                 "last_checked": time.time(),
                                 "error": "",
                                 "url": url,
@@ -3177,23 +2920,20 @@ class MonitoringEngine:
 
         self.log_event(f"🔄 Reintentando conexión individual para {name}...")
         try:
-            if self.force_simulation:
-                mentions = target_scraper.get_simulated_mention()
+            if cls_name == "YouTubeScraper":
+                mentions = target_scraper.scrape(self)
+            elif cls_name in ("RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper"):
+                mentions = target_scraper.scrape(self)
+            elif cls_name in ("RadioScraper", "TVScraper"):
+                mentions = target_scraper.scrape()
             else:
-                if cls_name == "YouTubeScraper":
-                    mentions = target_scraper.scrape(self)
-                elif cls_name in ("RSSScraper", "InstagramScraper", "TwitterScraper", "FacebookScraper"):
-                    mentions = target_scraper.scrape(self)
-                elif cls_name in ("RadioScraper", "TVScraper"):
-                    mentions = target_scraper.scrape()
-                else:
-                    mentions = None
-                    
+                mentions = None
+                
             if mentions:
                 self._process_mentions(mentions)
                 
             self.uptime_status[name] = {
-                "status": "Simulando" if self.force_simulation else "Online",
+                "status": "Online",
                 "last_checked": time.time(),
                 "error": "",
                 "url": url,

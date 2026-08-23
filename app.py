@@ -494,13 +494,10 @@ if "system_status" not in st.session_state:
     with st.spinner("Realizando diagnóstico del sistema..."):
         st.session_state.system_status = scrapers.check_system_status()
 
-# Detect default simulation state based on requirements
+# Detect dependencies
 sys_status = st.session_state.system_status
 missing_deps = not (sys_status["ffmpeg"] and sys_status["whisper"] and sys_status["playwright"] and sys_status["ollama"])
-
-if "force_simulation" not in st.session_state:
-    # Default to simulation if dependencies are missing, to guarantee smooth operation out-of-the-box
-    st.session_state.force_simulation = missing_deps
+st.session_state.force_simulation = False
 
 # Initialize persistent configuration values from database
 if "radio_channels_val" not in st.session_state:
@@ -669,7 +666,6 @@ if not st.session_state.monitoring_active:
             rss_feeds=rss_list,
             tv_channels=tv_list,
             scan_interval=st.session_state.get("scan_interval_val", 0),
-            force_simulation=st.session_state.force_simulation,
             whisper_model=st.session_state.get("whisper_model_val", "tiny"),
             ollama_model=st.session_state.get("ollama_model_val", "gemma4:e2b"),
             instagram_sessionid=st.session_state.get("instagram_sessionid_val", ""),
@@ -694,13 +690,6 @@ st.sidebar.markdown("---")
 
 # Monitoring Parameters
 st.sidebar.markdown("### <i class='fa-solid fa-gear'></i> Configuración del Motor", unsafe_allow_html=True)
-
-# Simulation toggle
-st.session_state.force_simulation = st.sidebar.toggle(
-    "Forzar Modo Simulación",
-    value=st.session_state.force_simulation,
-    help="Si está activo, generará datos de prueba simulados y evitará peticiones de red reales y procesamiento local pesado."
-)
 
 st.sidebar.slider(
     "Frecuencia de Escaneo (segundos)",
@@ -738,7 +727,7 @@ st.sidebar.selectbox(
     options=["tiny", "base"],
     index=0,
     key="whisper_model_val",
-    disabled=st.session_state.monitoring_active or st.session_state.force_simulation,
+    disabled=st.session_state.monitoring_active,
     help="Modelos más pesados incrementan el uso de CPU/RAM."
 )
 
@@ -1056,8 +1045,8 @@ if sys_status["ollama"]:
 else:
     st.sidebar.caption("Ollama offline en puerto `11434`.")
 
-if missing_deps and not st.session_state.force_simulation:
-    st.sidebar.warning("⚠️ Faltan dependencias en el sistema. Se recomienda activar 'Forzar Modo Simulación' para evitar fallas.")
+if missing_deps:
+    st.sidebar.warning("⚠️ Faltan algunas dependencias locales (FFmpeg, Whisper, Playwright u Ollama).")
 
 if st.sidebar.button("🔄 Re-verificar Dependencias", use_container_width=True):
     st.session_state.system_status = scrapers.check_system_status()
@@ -1427,8 +1416,6 @@ def render_right_column():
                 err = info["error"]
                 if status == "Online":
                     status_badge = f"<span style='color:#2ecc71; font-weight:bold;'>🟢 Online</span>"
-                elif status == "Simulando":
-                    status_badge = f"<span style='color:#3498db; font-weight:bold;'>🔵 Simulando</span>"
                 elif status == "No en vivo":
                     status_badge = f"<span style='color:#f39c12; font-weight:bold;' title='{err}'>🟡 No en vivo</span>"
                 else:
@@ -1447,7 +1434,7 @@ def render_right_column():
                                 st.toast(f"⚠️ {name} sigue inactivo: {msg[:60]}", icon="🔴")
                         st.rerun()
 
-                if status in ("Online", "Simulando"):
+                if status == "Online":
                     url = info.get("url")
                     media_type = info.get("type")
                     if url:
@@ -1519,11 +1506,10 @@ else:
 
 # Status indicators
 if st.session_state.monitoring_active:
-    mode_desc = "SIMULACIÓN COMPLETA" if st.session_state.force_simulation else "MONITOREO REAL EN VIVO"
     st.markdown(f"""
     <div class="pulse-container">
         <span class="pulse"></span>
-        <span style="color: #2ecc71; font-weight: bold; font-size: 0.95rem;">MOTOR ACTIVO ({mode_desc})</span>
+        <span style="color: #2ecc71; font-weight: bold; font-size: 0.95rem;">MOTOR ACTIVO (MONITOREO REAL EN VIVO)</span>
     </div>
     """, unsafe_allow_html=True)
 else:
@@ -1770,9 +1756,6 @@ with col_left:
                 # Keywords html badges
                 kw_badges = "".join([f"<span class='badge-kw'>#{kw}</span>" for kw in alert["keywords"]])
                 
-                # Simulated flag badge
-                sim_badge = "<span class='badge-simulated'>Simulación</span>" if alert["simulated"] else ""
-                
                 # Construct card html content (concatenated without leading spacing to avoid Markdown block-code rendering bugs)
                 html_card = (
                     f'<div class="pr-card {card_class}">'
@@ -1780,7 +1763,6 @@ with col_left:
                     f'<div style="display: flex; align-items: center; gap: 8px;">'
                     f'<span style="font-size: 1.4rem;">{source_icon}</span>'
                     f'<strong style="font-size: 1.1rem; color: #f1f2f6;">{alert["source"]}</strong>'
-                    f'{sim_badge}'
                     f'</div>'
                     f'{formatted_time_html}'
                     f'</div>'
