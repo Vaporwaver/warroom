@@ -541,6 +541,14 @@ def save_bool_config(key, db_key):
     val = "true" if st.session_state.get(key, True) else "false"
     database.set_state(db_key, val)
 
+def reset_inbox_filters():
+    """Vacía y restablece todos los filtros de la bandeja de validación."""
+    st.session_state["selected_keywords_val"] = []
+    st.session_state["selected_media_val"] = []
+    st.session_state["selected_sources_val"] = []
+    st.session_state["selected_sentiments_val"] = []
+    st.session_state.page_num = 1
+
 # --- SIDEBAR: Configuration & Control ---
 if os.path.exists("assets/logo.png"):
     st.sidebar.image("assets/logo.png", use_container_width=True)
@@ -1005,6 +1013,7 @@ with st.sidebar.expander("⚠️ Zona de Peligro"):
         st.session_state.alerts = []
         st.session_state.approved_alerts = []
         st.session_state.approved_count = 0
+        reset_inbox_filters()
         st.session_state.system_logs = ["⏱️ `[" + datetime.now().strftime("%H:%M:%S") + "]` Base de datos restablecida completamente."]
         
         st.success("✅ Base de datos borrada con éxito.")
@@ -1057,7 +1066,10 @@ st.sidebar.markdown("### 🧹 Mantenimiento")
 if st.sidebar.button("🧹 Resetear Caché y Enfriamientos", use_container_width=True, help="Borra la bitácora de contenidos procesados y restablece los enfriamientos para permitir re-escanear videos anteriores."):
     import database
     database.clear_cache_and_cooldowns()
+    reset_inbox_filters()
+    st.session_state.should_reload = True
     st.sidebar.success("✅ Caché y enfriamientos restablecidos con éxito.")
+    st.rerun()
 
 st.sidebar.markdown("### ⚙️ Actualizaciones")
 try:
@@ -1494,10 +1506,7 @@ if client_names:
     selected_client = next(c for c in clients if c["name"] == selected_client_name)
     if selected_client["id"] != st.session_state.active_client_id:
         st.session_state.active_client_id = selected_client["id"]
-        st.session_state.page_num = 1  # Reset page number to 1 when client changes
-        # Reset filter widget keys so new client's options initialize cleanly
-        for fk in ["selected_keywords_val", "selected_media_val", "selected_sources_val", "selected_sentiments_val"]:
-            st.session_state.pop(fk, None)
+        reset_inbox_filters()
         st.session_state.should_reload = True
         st.session_state.should_reload_approved = True
         st.rerun()
@@ -1579,13 +1588,26 @@ with col_left:
                     if added > 0:
                         st.success(f"✅ ¡{added} noticias encontradas y agregadas a la bandeja!")
                         st.session_state.alerts = database.get_alerts_by_status('pending', client_id=st.session_state.active_client_id)
+                        reset_inbox_filters()
                         st.rerun()
                     else:
                         st.info("ℹ️ No se detectaron noticias adicionales en los feeds digitales para las palabras clave actuales.")
 
         # Render filters
         if st.session_state.alerts:
-            st.markdown("##### <i class='fa-solid fa-filter'></i> Filtrar y Buscar Alertas", unsafe_allow_html=True)
+            col_filt_title, col_filt_clear = st.columns([0.72, 0.28])
+            with col_filt_title:
+                st.markdown("##### <i class='fa-solid fa-filter'></i> Filtrar y Buscar Alertas", unsafe_allow_html=True)
+            with col_filt_clear:
+                has_active_filters = bool(
+                    st.session_state.get("selected_keywords_val") or
+                    st.session_state.get("selected_media_val") or
+                    st.session_state.get("selected_sources_val") or
+                    st.session_state.get("selected_sentiments_val")
+                )
+                if st.button("🧹 Limpiar Filtros", key="btn_clear_inbox_filters", use_container_width=True, disabled=not has_active_filters, help="Restablece y vacía todos los filtros aplicados"):
+                    reset_inbox_filters()
+                    st.rerun()
             
             # Obtener todas las palabras clave únicas presentes en las alertas de la bandeja de validación
             all_keywords = set()
@@ -1596,20 +1618,37 @@ with col_left:
                             all_keywords.add(kw.strip())
             sorted_keywords = sorted(list(all_keywords))
             
-            col_f1, col_f2, col_f3, col_f4 = st.columns([0.35, 0.25, 0.22, 0.18])
+            # Safe initialize session state for filters if not present
+            if "selected_keywords_val" not in st.session_state:
+                st.session_state["selected_keywords_val"] = []
+            if "selected_media_val" not in st.session_state:
+                st.session_state["selected_media_val"] = []
+            if "selected_sources_val" not in st.session_state:
+                st.session_state["selected_sources_val"] = []
+            if "selected_sentiments_val" not in st.session_state:
+                st.session_state["selected_sentiments_val"] = []
+            
+            # Ensure selected keywords in session state are still valid
+            st.session_state["selected_keywords_val"] = [k for k in st.session_state["selected_keywords_val"] if k in sorted_keywords]
+
+            col_f1, col_f2, col_f3, col_f4 = st.columns([0.30, 0.24, 0.24, 0.22])
             with col_f1:
                 selected_keywords = st.multiselect(
                     "Palabras Clave",
                     options=sorted_keywords,
-                    default=[],
-                    placeholder="Seleccionar...",
+                    placeholder="Todas las palabras",
                     key="selected_keywords_val"
                 )
             with col_f2:
-                selected_media = st.multiselect("Tipo de Medio", ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], default=["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"], key="selected_media_val")
+                selected_media = st.multiselect(
+                    "Tipo de Medio",
+                    ["📻 Radio", "📺 TV", "🎥 YouTube", "📸 Instagram", "🐦 Twitter", "📘 Facebook", "📰 Medios Digitales"],
+                    placeholder="Todos los medios",
+                    key="selected_media_val"
+                )
             with col_f3:
                 # Find all sources in the alerts cache
-                all_sources = list(set([a["source"] for a in st.session_state.alerts]))
+                all_sources = sorted(list(set([a["source"] for a in st.session_state.alerts])))
                 # Filter specific sources based on selected media types
                 matching_sources = []
                 if not selected_media:
@@ -1633,9 +1672,20 @@ with col_left:
                             elif ("RSS" in m_type or "Medios Digitales" in m_type) and any(k in src_lower for k in ("rss", "medios digitales", "google news")):
                                 matching_sources.append(src)
                 matching_sources = sorted(list(set(matching_sources)))
-                selected_sources = st.multiselect("Fuente/Canal", options=matching_sources, default=matching_sources, key="selected_sources_val")
+                st.session_state["selected_sources_val"] = [s for s in st.session_state["selected_sources_val"] if s in matching_sources]
+                selected_sources = st.multiselect(
+                    "Fuente/Canal",
+                    options=matching_sources,
+                    placeholder="Todas las fuentes",
+                    key="selected_sources_val"
+                )
             with col_f4:
-                selected_sentiments = st.multiselect("Sentimiento", options=["Positivo", "Neutral", "Negativo"], default=["Positivo", "Neutral", "Negativo"], key="selected_sentiments_val")
+                selected_sentiments = st.multiselect(
+                    "Sentimiento",
+                    options=["Positivo", "Neutral", "Negativo"],
+                    placeholder="Todos",
+                    key="selected_sentiments_val"
+                )
                 
             filtered_alerts = []
             for alert in st.session_state.alerts:
@@ -2758,6 +2808,7 @@ with col_left:
                                 if st.session_state.active_client_id == target_client["id"]:
                                     remaining_clients = [c for c in clients if c["id"] != target_client["id"]]
                                     st.session_state.active_client_id = remaining_clients[0]["id"]
+                                    reset_inbox_filters()
                                 st.session_state.client_form_action = "🆕 Agregar Nuevo Cliente"
                                 st.session_state.pop("temp_client_keywords", None)
                                 st.session_state.pop("last_form_action", None)
