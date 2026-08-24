@@ -5,6 +5,10 @@ echo     INICIANDO PULSE METRICS - MONITOREO CON IA
 echo =======================================================
 echo.
 
+:: Configure Ollama memory limits: release loaded models after 1 minute of inactivity
+set OLLAMA_KEEP_ALIVE=1m
+set OLLAMA_NUM_PARALLEL=1
+
 :: 1. Start Ollama in the background if not running
 echo [*] Iniciando Ollama...
 tasklist | findstr /i "ollama" >nul

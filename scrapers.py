@@ -1075,6 +1075,31 @@ class YouTubeScraper:
             log(f"Error raspando YouTube en vivo ({self.channel_name}): {str(e)}")
             raise e
 
+# --- Playwright Memory Saver Helpers ---
+PLAYWRIGHT_LOW_MEM_ARGS = [
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--renderer-process-limit=1",
+    "--no-zygote",
+    "--disable-background-networking",
+    "--disable-extensions",
+    "--blink-settings=imagesEnabled=false"
+]
+
+def setup_playwright_memory_saver(page):
+    """Aborts heavy resource requests (images, media, fonts) to conserve RAM during scraping."""
+    try:
+        def _route_filter(route):
+            if route.request.resource_type in ("image", "media", "font"):
+                route.abort()
+            else:
+                route.continue_()
+        page.route("**/*", _route_filter)
+    except Exception:
+        pass
+
 
 # --- Instagram Scraper ---
 class InstagramScraper:
@@ -1123,42 +1148,38 @@ class InstagramScraper:
                     if scanned_count >= 16:
                         break
                     href = post["href"]
-                    # Extract shortcode
+                    caption = post.get("alt", "")
+                    
+                    if not href:
+                        continue
+                        
+                    post_url = href
+                    if not post_url.startswith("http"):
+                        import urllib.parse
+                        post_url = urllib.parse.urljoin("https://imginn.com", post_url)
+                        
+                    clean_text = caption
+                    
                     shortcode = None
                     if "/p/" in href:
                         parts = href.split("/p/")
                         if len(parts) > 1:
-                            shortcode = parts[1].split("/")[0].split("?")[0].strip()
-                    elif "/media/" in href:
-                        parts = href.split("/media/")
-                        if len(parts) > 1:
-                            shortcode = parts[1].split("/")[0].split("?")[0].strip()
+                            shortcode = parts[1].replace("/", "").strip()
                             
-                    if not shortcode:
-                        continue
-                        
-                    identifier = f"ig_{shortcode}"
+                    identifier = f"ig_{shortcode}" if shortcode else f"ig_{hashlib.md5((post_url + clean_text).encode('utf-8')).hexdigest()[:8]}"
                     
-                    # Skip if already processed in database
                     if database.is_processed(identifier):
                         continue
                         
-                    caption_text = post["alt"]
-                    if not caption_text:
-                        continue
-                    
                     scanned_count += 1
-                    found_kws = contains_keywords(caption_text, self.keywords)
-                    
-                    # Mark as processed in database
+                    found_kws = contains_keywords(clean_text, self.keywords)
                     has_mention = len(found_kws) > 0
                     database.mark_processed(identifier, "instagram", has_mention=has_mention)
                     
                     if found_kws:
-                        post_url = f"https://www.instagram.com/p/{shortcode}/"
                         mentions.append({
                             "source": f"Instagram (@{self.username})",
-                            "text": caption_text.strip(),
+                            "text": clean_text.strip(),
                             "keywords": found_kws,
                             "timestamp": time.time(),
                             "identifier": identifier,
@@ -1167,10 +1188,11 @@ class InstagramScraper:
                                 "post_url": post_url
                             }
                         })
-                log_func(f"Bypass de {mirror_name} completado. {scanned_count} posts analizados.")
+                        
+                log_func(f"Bypass de {mirror_name} completado. {scanned_count} publicaciones públicas analizadas.")
                 return mentions
             except Exception as mirror_err:
-                log_func(f"Aviso en bypass de {mirror_name}: {mirror_err}")
+                log_func(f"Error en bypass {mirror_name}: {mirror_err}. Intentando siguiente opción...")
                 continue
                 
         log_func("Instagram: No se pudo conectar a los espejos públicos de bypass. Se sugiere configurar 'sessionid' para acceso directo sin restricciones.")
@@ -1185,16 +1207,18 @@ class InstagramScraper:
             # Import playwright inside scrape to avoid global loading delays
             from playwright.sync_api import sync_playwright
             from playwright_stealth import Stealth
+            import gc
             
             log(f"Iniciando escaneo de Instagram (@{self.username})...")
             
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=True, args=PLAYWRIGHT_LOW_MEM_ARGS)
                 context = browser.new_context(
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     viewport={"width": 1280, "height": 800}
                 )
                 page = context.new_page()
+                setup_playwright_memory_saver(page)
                 Stealth().apply_stealth_sync(page)
                 
                 # Add Instagram sessionid cookie if provided to bypass login walls
@@ -1430,14 +1454,16 @@ class TwitterScraper:
             from playwright_stealth import Stealth
             import urllib.parse
             import hashlib
+            import gc
             
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=True, args=PLAYWRIGHT_LOW_MEM_ARGS)
                 context = browser.new_context(
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     viewport={"width": 1280, "height": 800}
                 )
                 page = context.new_page()
+                setup_playwright_memory_saver(page)
                 Stealth().apply_stealth_sync(page)
                 
                 # Add Twitter auth_token cookie if provided to bypass login walls
@@ -1574,6 +1600,7 @@ class TwitterScraper:
                         continue
                     
                 browser.close()
+                gc.collect()
                 return all_mentions
         except Exception as e:
             log(f"Error general raspando Twitter en vivo: {str(e)}")
@@ -1598,6 +1625,7 @@ class FacebookScraper:
             import hashlib
             import time
             import json
+            import gc
             
             if not self.keywords:
                 log("Facebook: No hay palabras clave configuradas para buscar.")
@@ -1607,12 +1635,13 @@ class FacebookScraper:
             log("Iniciando búsqueda de Facebook por palabras clave...")
             
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
+                browser = p.chromium.launch(headless=True, args=PLAYWRIGHT_LOW_MEM_ARGS)
                 context = browser.new_context(
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     viewport={"width": 1280, "height": 800}
                 )
                 page = context.new_page()
+                setup_playwright_memory_saver(page)
                 Stealth().apply_stealth_sync(page)
                 
                 # Add Facebook cookies if provided to bypass login walls
@@ -1663,6 +1692,7 @@ class FacebookScraper:
                     if "login" in page.url.lower() and not self.cookies_str:
                         log("Facebook redirigió a la página de login. Se requieren cookies para continuar.")
                         browser.close()
+                        gc.collect()
                         return all_mentions
                     
                     # Fast scroll down to load search results
@@ -1771,6 +1801,7 @@ class FacebookScraper:
                     log(f"Búsqueda de '{keyword}' completada. {scanned_count} posts analizados.")
                 
                 browser.close()
+                gc.collect()
                 return all_mentions
         except Exception as e:
             log(f"Error raspando Facebook en vivo: {str(e)}")
@@ -2460,7 +2491,8 @@ class OllamaAnalyzer:
                 messages=[
                     {'role': 'system', 'content': system_prompt},
                     {'role': 'user', 'content': prompt_text}
-                ]
+                ],
+                keep_alive="1m"
             )
             return response['message']['content']
         except Exception as e:
